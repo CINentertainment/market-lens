@@ -197,3 +197,11 @@ class MarketAssetDetailResponse(MarketAssetResponse):
     price_bars: list[PriceBarResponse] = Field(
         default_factory=list
     )
+class MarketDataSyncResponse(BaseModel):
+    asset_id: int
+    symbol: str
+    start_date: date
+    end_date: date
+    received_count: int = Field(ge=0)
+    created_count: int = Field(ge=0)
+    updated_count: int = Field(ge=0)

@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.providers import yahoo_finance
 from app.database import Base, engine, get_db
 
 
@@ -207,6 +208,74 @@ def delete_asset(
         status_code=status.HTTP_204_NO_CONTENT
     )
 
+@app.post(
+    "/assets/{asset_id}/sync",
+    response_model=schemas.MarketDataSyncResponse,
+)
+def sync_asset_market_data(
+    asset_id: int,
+    start_date: date,
+    end_date: date,
+    database: Session = Depends(get_db),
+):
+    asset = get_asset_or_404(asset_id, database)
+
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="start_date cannot be later than end_date.",
+        )
+
+    try:
+        received_bars = yahoo_finance.fetch_price_history(
+            symbol=asset.symbol,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except yahoo_finance.MarketDataProviderError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(error),
+        ) from error
+
+    created_count = 0
+    updated_count = 0
+
+    for bar_data in received_bars:
+        statement = select(models.PriceBar).where(
+            models.PriceBar.asset_id == asset_id,
+            models.PriceBar.trading_date
+            == bar_data.trading_date,
+        )
+
+        existing_bar = database.scalar(statement)
+        bar_values = bar_data.model_dump()
+
+        if existing_bar is None:
+            database.add(
+                models.PriceBar(
+                    asset_id=asset_id,
+                    **bar_values,
+                )
+            )
+            created_count += 1
+        else:
+            for field_name, value in bar_values.items():
+                setattr(existing_bar, field_name, value)
+
+            updated_count += 1
+
+    database.commit()
+
+    return schemas.MarketDataSyncResponse(
+        asset_id=asset.id,
+        symbol=asset.symbol,
+        start_date=start_date,
+        end_date=end_date,
+        received_count=len(received_bars),
+        created_count=created_count,
+        updated_count=updated_count,
+    )
 
 @app.post(
     "/assets/{asset_id}/prices",
