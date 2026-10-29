@@ -1,12 +1,16 @@
+from datetime import date
+from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, delete
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app import models
+from app import models, schemas
 from app.database import Base, get_db
 from app.main import app
+from app.providers import yahoo_finance
 
 
 test_engine = create_engine(
@@ -395,3 +399,204 @@ def test_delete_price_bar():
 
     assert list_response.status_code == 200
     assert list_response.json() == []
+
+
+def test_sync_asset_market_data(monkeypatch):
+    asset = create_test_asset()
+    asset_id = asset["id"]
+
+    def mock_fetch_price_history(
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ):
+        assert symbol == "AAPL"
+        assert start_date == date(2026, 10, 26)
+        assert end_date == date(2026, 10, 27)
+
+        return [
+            schemas.PriceBarCreate(
+                trading_date=date(2026, 10, 26),
+                open_price=Decimal("268.50"),
+                high_price=Decimal("272.00"),
+                low_price=Decimal("267.75"),
+                close_price=Decimal("271.25"),
+                adjusted_close=Decimal("271.25"),
+                volume=45200000,
+            ),
+            schemas.PriceBarCreate(
+                trading_date=date(2026, 10, 27),
+                open_price=Decimal("271.50"),
+                high_price=Decimal("274.25"),
+                low_price=Decimal("270.50"),
+                close_price=Decimal("273.75"),
+                adjusted_close=Decimal("273.75"),
+                volume=48100000,
+            ),
+        ]
+
+    monkeypatch.setattr(
+        "app.main.yahoo_finance.fetch_price_history",
+        mock_fetch_price_history,
+    )
+
+    response = client.post(
+        f"/assets/{asset_id}/sync",
+        params={
+            "start_date": "2026-10-26",
+            "end_date": "2026-10-27",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "asset_id": asset_id,
+        "symbol": "AAPL",
+        "start_date": "2026-10-26",
+        "end_date": "2026-10-27",
+        "received_count": 2,
+        "created_count": 2,
+        "updated_count": 0,
+    }
+
+    prices_response = client.get(
+        f"/assets/{asset_id}/prices"
+    )
+
+    assert prices_response.status_code == 200
+    assert len(prices_response.json()) == 2
+
+
+def test_sync_updates_existing_price_bar(monkeypatch):
+    asset = create_test_asset()
+    asset_id = asset["id"]
+    closing_price = Decimal("271.25")
+
+    def mock_fetch_price_history(
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ):
+        return [
+            schemas.PriceBarCreate(
+                trading_date=date(2026, 10, 27),
+                open_price=Decimal("268.50"),
+                high_price=Decimal("275.00"),
+                low_price=Decimal("267.75"),
+                close_price=closing_price,
+                adjusted_close=closing_price,
+                volume=45200000,
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.main.yahoo_finance.fetch_price_history",
+        mock_fetch_price_history,
+    )
+
+    first_response = client.post(
+        f"/assets/{asset_id}/sync",
+        params={
+            "start_date": "2026-10-27",
+            "end_date": "2026-10-27",
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert first_response.json()["created_count"] == 1
+    assert first_response.json()["updated_count"] == 0
+
+    closing_price = Decimal("273.75")
+
+    second_response = client.post(
+        f"/assets/{asset_id}/sync",
+        params={
+            "start_date": "2026-10-27",
+            "end_date": "2026-10-27",
+        },
+    )
+
+    assert second_response.status_code == 200
+    assert second_response.json()["created_count"] == 0
+    assert second_response.json()["updated_count"] == 1
+
+    prices_response = client.get(
+        f"/assets/{asset_id}/prices"
+    )
+
+    assert prices_response.status_code == 200
+
+    prices = prices_response.json()
+
+    assert len(prices) == 1
+    assert Decimal(prices[0]["close_price"]) == Decimal(
+        "273.750000"
+    )
+
+
+def test_sync_handles_market_data_provider_failure(
+    monkeypatch,
+):
+    asset = create_test_asset()
+
+    def mock_fetch_price_history(
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ):
+        raise yahoo_finance.MarketDataProviderError(
+            "Yahoo Finance is temporarily unavailable."
+        )
+
+    monkeypatch.setattr(
+        "app.main.yahoo_finance.fetch_price_history",
+        mock_fetch_price_history,
+    )
+
+    response = client.post(
+        f"/assets/{asset['id']}/sync",
+        params={
+            "start_date": "2026-10-26",
+            "end_date": "2026-10-27",
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": (
+            "Yahoo Finance is temporarily unavailable."
+        )
+    }
+def test_sync_rejects_reversed_date_range(monkeypatch):
+    asset = create_test_asset()
+
+    def mock_fetch_price_history(
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ):
+        pytest.fail(
+            "The provider should not be called "
+            "for an invalid date range."
+        )
+
+    monkeypatch.setattr(
+        "app.main.yahoo_finance.fetch_price_history",
+        mock_fetch_price_history,
+    )
+
+    response = client.post(
+        f"/assets/{asset['id']}/sync",
+        params={
+            "start_date": "2026-10-28",
+            "end_date": "2026-10-27",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": (
+            "start_date cannot be later than "
+            "end_date."
+        )
+    }
