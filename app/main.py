@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 from fastapi import (
     Depends,
@@ -7,16 +8,21 @@ from fastapi import (
     Response,
     status,
 )
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.providers import yahoo_finance
 from app.database import Base, engine, get_db
+from app.providers import yahoo_finance
 
 
 Base.metadata.create_all(bind=engine)
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
 
 
 app = FastAPI(
@@ -26,6 +32,12 @@ app = FastAPI(
         "tracking application."
     ),
     version="0.1.0",
+)
+
+app.mount(
+    "/static",
+    StaticFiles(directory=STATIC_DIR),
+    name="static",
 )
 
 
@@ -45,6 +57,13 @@ def get_asset_or_404(
         )
 
     return asset
+
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard():
+    return FileResponse(
+        STATIC_DIR / "index.html"
+    )
 
 
 @app.get("/")
@@ -208,6 +227,7 @@ def delete_asset(
         status_code=status.HTTP_204_NO_CONTENT
     )
 
+
 @app.post(
     "/assets/{asset_id}/sync",
     response_model=schemas.MarketDataSyncResponse,
@@ -218,19 +238,29 @@ def sync_asset_market_data(
     end_date: date,
     database: Session = Depends(get_db),
 ):
-    asset = get_asset_or_404(asset_id, database)
+    asset = get_asset_or_404(
+        asset_id,
+        database,
+    )
 
     if start_date > end_date:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="start_date cannot be later than end_date.",
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=(
+                "start_date cannot be later than "
+                "end_date."
+            ),
         )
 
     try:
-        received_bars = yahoo_finance.fetch_price_history(
-            symbol=asset.symbol,
-            start_date=start_date,
-            end_date=end_date,
+        received_bars = (
+            yahoo_finance.fetch_price_history(
+                symbol=asset.symbol,
+                start_date=start_date,
+                end_date=end_date,
+            )
         )
     except yahoo_finance.MarketDataProviderError as error:
         raise HTTPException(
@@ -242,7 +272,9 @@ def sync_asset_market_data(
     updated_count = 0
 
     for bar_data in received_bars:
-        statement = select(models.PriceBar).where(
+        statement = select(
+            models.PriceBar
+        ).where(
             models.PriceBar.asset_id == asset_id,
             models.PriceBar.trading_date
             == bar_data.trading_date,
@@ -258,10 +290,17 @@ def sync_asset_market_data(
                     **bar_values,
                 )
             )
+
             created_count += 1
         else:
-            for field_name, value in bar_values.items():
-                setattr(existing_bar, field_name, value)
+            for field_name, value in (
+                bar_values.items()
+            ):
+                setattr(
+                    existing_bar,
+                    field_name,
+                    value,
+                )
 
             updated_count += 1
 
@@ -276,6 +315,7 @@ def sync_asset_market_data(
         created_count=created_count,
         updated_count=updated_count,
     )
+
 
 @app.post(
     "/assets/{asset_id}/prices",
@@ -346,7 +386,9 @@ def list_price_bars(
             ),
         )
 
-    statement = select(models.PriceBar).where(
+    statement = select(
+        models.PriceBar
+    ).where(
         models.PriceBar.asset_id == asset_id
     )
 

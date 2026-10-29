@@ -600,3 +600,10 @@ def test_sync_rejects_reversed_date_range(monkeypatch):
             "end_date."
         )
     }
+def test_dashboard():
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "Market Lens" in response.text
+    assert "/static/styles.css" in response.text
+    assert "/static/app.js" in response.text

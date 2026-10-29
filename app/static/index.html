@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Market Lens</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/styles.css"
+    >
+</head>
+
+<body>
+    <header class="application-header">
+        <div class="header-content">
+            <div>
+                <p class="eyebrow">
+                    MARKET INTELLIGENCE PLATFORM
+                </p>
+
+                <h1>Market Lens</h1>
+
+                <p class="subtitle">
+                    Local market tracking, historical data,
+                    and analytical monitoring
+                </p>
+            </div>
+
+            <div class="system-status">
+                <span class="status-light"></span>
+                Market Data Connected
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <section class="statistics-grid">
+            <article class="stat-card purple">
+                <p>Tracked Assets</p>
+                <strong id="trackedAssets">0</strong>
+            </article>
+
+            <article class="stat-card blue">
+                <p>Active Assets</p>
+                <strong id="activeAssets">0</strong>
+            </article>
+
+            <article class="stat-card cyan">
+                <p>Stored Price Bars</p>
+                <strong id="storedPrices">0</strong>
+            </article>
+
+            <article class="stat-card amber">
+                <p>Selected Symbol</p>
+                <strong id="selectedSymbol">—</strong>
+            </article>
+        </section>
+
+        <section class="workspace-grid">
+            <article class="panel asset-form-panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">
+                            ASSET INTAKE
+                        </p>
+
+                        <h2>Track Market Asset</h2>
+                    </div>
+                </div>
+
+                <form id="assetForm">
+                    <label for="assetSymbol">
+                        Symbol
+                    </label>
+
+                    <input
+                        id="assetSymbol"
+                        type="text"
+                        maxlength="20"
+                        placeholder="AAPL"
+                        required
+                    >
+
+                    <label for="assetName">
+                        Asset Name
+                    </label>
+
+                    <input
+                        id="assetName"
+                        type="text"
+                        maxlength="200"
+                        placeholder="Apple Inc."
+                    >
+
+                    <div class="form-grid two-column">
+                        <div>
+                            <label for="assetType">
+                                Asset Type
+                            </label>
+
+                            <select id="assetType">
+                                <option value="Equity">
+                                    Equity
+                                </option>
+
+                                <option value="ETF">
+                                    ETF
+                                </option>
+
+                                <option value="Index">
+                                    Index
+                                </option>
+
+                                <option value="Crypto">
+                                    Crypto
+                                </option>
+
+                                <option value="Mutual Fund">
+                                    Mutual Fund
+                                </option>
+
+                                <option value="Other">
+                                    Other
+                                </option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="assetCurrency">
+                                Currency
+                            </label>
+
+                            <input
+                                id="assetCurrency"
+                                type="text"
+                                maxlength="10"
+                                value="USD"
+                                required
+                            >
+                        </div>
+
+                        <div>
+                            <label for="assetExchange">
+                                Exchange
+                            </label>
+
+                            <input
+                                id="assetExchange"
+                                type="text"
+                                maxlength="100"
+                                placeholder="NASDAQ"
+                            >
+                        </div>
+
+                        <div>
+                            <label for="assetActive">
+                                Status
+                            </label>
+
+                            <select id="assetActive">
+                                <option value="true">
+                                    Active
+                                </option>
+
+                                <option value="false">
+                                    Inactive
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button
+                        class="primary-button"
+                        type="submit"
+                    >
+                        Add Asset
+                    </button>
+                </form>
+            </article>
+
+            <article class="panel watchlist-panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">
+                            MARKET WATCH
+                        </p>
+
+                        <h2>Tracked Assets</h2>
+                    </div>
+
+                    <button
+                        id="refreshAssetsButton"
+                        class="secondary-button"
+                        type="button"
+                    >
+                        Refresh
+                    </button>
+                </div>
+
+                <div class="filter-row">
+                    <input
+                        id="assetSearch"
+                        type="search"
+                        placeholder="Search symbol or asset name"
+                    >
+
+                    <select id="assetTypeFilter">
+                        <option value="">
+                            All asset types
+                        </option>
+
+                        <option value="Equity">
+                            Equity
+                        </option>
+
+                        <option value="ETF">
+                            ETF
+                        </option>
+
+                        <option value="Index">
+                            Index
+                        </option>
+
+                        <option value="Crypto">
+                            Crypto
+                        </option>
+
+                        <option value="Mutual Fund">
+                            Mutual Fund
+                        </option>
+
+                        <option value="Other">
+                            Other
+                        </option>
+                    </select>
+                </div>
+
+                <div
+                    id="assetList"
+                    class="asset-list"
+                >
+                    <p class="empty-state">
+                        Loading tracked assets...
+                    </p>
+                </div>
+            </article>
+        </section>
+
+        <section
+            id="analysisWorkspace"
+            class="analysis-workspace hidden"
+        >
+            <article class="panel selected-asset-panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">
+                            SELECTED ASSET
+                        </p>
+
+                        <h2 id="selectedAssetTitle">
+                            Market Analysis
+                        </h2>
+                    </div>
+
+                    <button
+                        id="closeWorkspaceButton"
+                        class="secondary-button"
+                        type="button"
+                    >
+                        Close
+                    </button>
+                </div>
+
+                <div
+                    id="selectedAssetSummary"
+                    class="asset-summary"
+                ></div>
+            </article>
+
+            <section class="analysis-grid">
+                <article class="panel sync-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">
+                                DATA ACQUISITION
+                            </p>
+
+                            <h2>Synchronize Prices</h2>
+                        </div>
+                    </div>
+
+                    <form id="syncForm">
+                        <div class="form-grid two-column">
+                            <div>
+                                <label for="syncStartDate">
+                                    Start Date
+                                </label>
+
+                                <input
+                                    id="syncStartDate"
+                                    type="date"
+                                    required
+                                >
+                            </div>
+
+                            <div>
+                                <label for="syncEndDate">
+                                    End Date
+                                </label>
+
+                                <input
+                                    id="syncEndDate"
+                                    type="date"
+                                    required
+                                >
+                            </div>
+                        </div>
+
+                        <button
+                            class="primary-button"
+                            type="submit"
+                        >
+                            Sync Yahoo Finance
+                        </button>
+                    </form>
+
+                    <div
+                        id="syncResult"
+                        class="sync-result hidden"
+                    ></div>
+                </article>
+
+                <article class="panel market-summary-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">
+                                LATEST MARKET DATA
+                            </p>
+
+                            <h2>Price Summary</h2>
+                        </div>
+                    </div>
+
+                    <div
+                        id="latestPriceSummary"
+                        class="price-summary-grid"
+                    >
+                        <p class="empty-state">
+                            No price data available.
+                        </p>
+                    </div>
+                </article>
+            </section>
+
+            <article class="panel history-panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">
+                            HISTORICAL RECORD
+                        </p>
+
+                        <h2>Price History</h2>
+                    </div>
+
+                    <button
+                        id="refreshPricesButton"
+                        class="secondary-button"
+                        type="button"
+                    >
+                        Refresh Prices
+                    </button>
+                </div>
+
+                <div class="chart-container">
+                    <svg
+                        id="priceChart"
+                        viewBox="0 0 1000 300"
+                        role="img"
+                        aria-label="Historical closing-price chart"
+                    ></svg>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Open</th>
+                                <th>High</th>
+                                <th>Low</th>
+                                <th>Close</th>
+                                <th>Adjusted</th>
+                                <th>Volume</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="priceTableBody">
+                            <tr>
+                                <td colspan="7">
+                                    No price data available.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <footer>
+        Market Lens · Version 0.1.0 · CIN Entertainment
+    </footer>
+
+    <div
+        id="toast"
+        class="toast hidden"
+        role="status"
+        aria-live="polite"
+    ></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
