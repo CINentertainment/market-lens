@@ -205,3 +205,14 @@ class MarketDataSyncResponse(BaseModel):
     received_count: int = Field(ge=0)
     created_count: int = Field(ge=0)
     updated_count: int = Field(ge=0)
+class MarketAnalyticsResponse(BaseModel):
+    asset_id: int
+    symbol: str
+    price_bar_count: int
+    latest_close: float | None
+    daily_change_percent: float | None
+    total_return_percent: float | None
+    moving_average_20: float | None
+    moving_average_50: float | None
+    annualized_volatility_percent: float | None
+    trend: str

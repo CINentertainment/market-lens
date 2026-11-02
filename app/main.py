@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import models, schemas
+from app import analytics, models, schemas
 from app.database import Base, engine, get_db
 from app.providers import yahoo_finance
 
@@ -445,3 +445,38 @@ def delete_price_bar(
     return Response(
         status_code=status.HTTP_204_NO_CONTENT
     )
+@app.get(
+    "/assets/{asset_id}/analytics",
+    response_model=schemas.MarketAnalyticsResponse,
+)
+def get_asset_analytics(
+    asset_id: int,
+    database: Session = Depends(get_db),
+):
+    asset = get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    price_bars = database.scalars(
+        select(models.PriceBar)
+        .where(
+            models.PriceBar.asset_id
+            == asset.id
+        )
+        .order_by(
+            models.PriceBar.trading_date.asc()
+        )
+    ).all()
+
+    analytics_result = (
+        analytics.build_market_analytics(
+            price_bars
+        )
+    )
+
+    return {
+        "asset_id": asset.id,
+        "symbol": asset.symbol,
+        **analytics_result,
+    }

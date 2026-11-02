@@ -607,3 +607,110 @@ def test_dashboard():
     assert "Market Lens" in response.text
     assert "/static/styles.css" in response.text
     assert "/static/app.js" in response.text
+def test_get_asset_analytics():
+    asset = create_test_asset()
+    asset_id = asset["id"]
+
+    price_data = [
+        {
+            "trading_date": "2026-10-27",
+            "open_price": "99.00",
+            "high_price": "102.00",
+            "low_price": "98.00",
+            "close_price": "100.00",
+            "adjusted_close": "100.00",
+            "volume": 1000000,
+        },
+        {
+            "trading_date": "2026-10-28",
+            "open_price": "101.00",
+            "high_price": "106.00",
+            "low_price": "100.00",
+            "close_price": "105.00",
+            "adjusted_close": "105.00",
+            "volume": 1100000,
+        },
+        {
+            "trading_date": "2026-10-29",
+            "open_price": "106.00",
+            "high_price": "112.00",
+            "low_price": "104.00",
+            "close_price": "110.00",
+            "adjusted_close": "110.00",
+            "volume": 1200000,
+        },
+    ]
+
+    for price_bar in price_data:
+        response = client.post(
+            f"/assets/{asset_id}/prices",
+            json=price_bar,
+        )
+
+        assert response.status_code == 201
+
+    response = client.get(
+        f"/assets/{asset_id}/analytics"
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["asset_id"] == asset_id
+    assert data["symbol"] == "AAPL"
+    assert data["price_bar_count"] == 3
+    assert data["latest_close"] == pytest.approx(
+        110.00
+    )
+    assert data["daily_change_percent"] == (
+        pytest.approx(
+            ((110.00 - 105.00) / 105.00)
+            * 100
+        )
+    )
+    assert data["total_return_percent"] == (
+        pytest.approx(10.0)
+    )
+    assert data["moving_average_20"] is None
+    assert data["moving_average_50"] is None
+    assert (
+        data[
+            "annualized_volatility_percent"
+        ]
+        is not None
+    )
+    assert data["trend"] == "Insufficient Data"
+
+
+def test_get_asset_analytics_without_prices():
+    asset = create_test_asset()
+
+    response = client.get(
+        f"/assets/{asset['id']}/analytics"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "asset_id": asset["id"],
+        "symbol": "AAPL",
+        "price_bar_count": 0,
+        "latest_close": None,
+        "daily_change_percent": None,
+        "total_return_percent": None,
+        "moving_average_20": None,
+        "moving_average_50": None,
+        "annualized_volatility_percent": None,
+        "trend": "Insufficient Data",
+    }
+
+
+def test_get_analytics_for_missing_asset():
+    response = client.get(
+        "/assets/9999/analytics"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Market asset not found."
+    }
