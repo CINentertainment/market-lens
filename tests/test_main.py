@@ -47,6 +47,7 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def clear_database():
     with Session(test_engine) as database:
+        database.execute(delete(models.MarketSignal))
         database.execute(delete(models.PriceBar))
         database.execute(delete(models.MarketAsset))
         database.commit()
@@ -713,4 +714,235 @@ def test_get_analytics_for_missing_asset():
     assert response.status_code == 404
     assert response.json() == {
         "detail": "Market asset not found."
+    }
+def create_test_signal(
+    asset_id: int,
+    signal_type: str = "Watch",
+    target_price: str | None = "200.00",
+    trigger_direction: str | None = "Above",
+) -> dict:
+    response = client.post(
+        f"/assets/{asset_id}/signals",
+        json={
+            "signal_type": signal_type,
+            "target_price": target_price,
+            "trigger_direction": trigger_direction,
+            "rationale": "Test market signal.",
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
+
+
+def test_create_market_signal():
+    asset = create_test_asset()
+
+    response = client.post(
+        f"/assets/{asset['id']}/signals",
+        json={
+            "signal_type": "Buy",
+            "target_price": "300.00",
+            "trigger_direction": "Below",
+            "rationale": "Review if the price falls.",
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 201
+
+    signal = response.json()
+
+    assert signal["asset_id"] == asset["id"]
+    assert signal["signal_type"] == "Buy"
+    assert signal["target_price"] == "300.000000"
+    assert signal["trigger_direction"] == "Below"
+    assert signal["rationale"] == (
+        "Review if the price falls."
+    )
+    assert signal["is_active"] is True
+    assert signal["is_triggered"] is False
+    assert signal["triggered_at"] is None
+
+
+def test_list_market_signals():
+    asset = create_test_asset()
+
+    created_signal = create_test_signal(
+        asset["id"]
+    )
+
+    response = client.get(
+        f"/assets/{asset['id']}/signals"
+    )
+
+    assert response.status_code == 200
+
+    signals = response.json()
+
+    assert len(signals) == 1
+    assert signals[0]["id"] == created_signal["id"]
+
+
+def test_get_market_signal():
+    asset = create_test_asset()
+    signal = create_test_signal(asset["id"])
+
+    response = client.get(
+        (
+            f"/assets/{asset['id']}"
+            f"/signals/{signal['id']}"
+        )
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == signal["id"]
+
+
+def test_create_signal_for_missing_asset():
+    response = client.post(
+        "/assets/999/signals",
+        json={
+            "signal_type": "Watch",
+            "target_price": "200.00",
+            "trigger_direction": "Above",
+            "rationale": "Missing asset test.",
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Market asset not found."
+    }
+
+
+def test_reject_incomplete_signal_trigger():
+    asset = create_test_asset()
+
+    response = client.post(
+        f"/assets/{asset['id']}/signals",
+        json={
+            "signal_type": "Watch",
+            "target_price": "200.00",
+            "trigger_direction": None,
+            "rationale": "Incomplete trigger.",
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_signal_triggers_above_target():
+    asset = create_test_asset()
+
+    create_test_price(
+        asset["id"],
+        trading_date="2026-10-27",
+    )
+
+    response = client.post(
+        f"/assets/{asset['id']}/signals",
+        json={
+            "signal_type": "Review",
+            "target_price": "100.00",
+            "trigger_direction": "Above",
+            "rationale": "Price crossed the target.",
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["is_triggered"] is True
+    assert response.json()["triggered_at"] is not None
+
+
+def test_signal_remains_untriggered():
+    asset = create_test_asset()
+
+    create_test_price(
+        asset["id"],
+        trading_date="2026-10-27",
+    )
+
+    response = client.post(
+        f"/assets/{asset['id']}/signals",
+        json={
+            "signal_type": "Watch",
+            "target_price": "9999.00",
+            "trigger_direction": "Above",
+            "rationale": "Price has not reached target.",
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["is_triggered"] is False
+    assert response.json()["triggered_at"] is None
+
+
+def test_update_market_signal():
+    asset = create_test_asset()
+    signal = create_test_signal(asset["id"])
+
+    response = client.patch(
+        (
+            f"/assets/{asset['id']}"
+            f"/signals/{signal['id']}"
+        ),
+        json={
+            "signal_type": "Sell",
+            "target_price": "150.00",
+            "trigger_direction": "Below",
+            "rationale": "Updated test signal.",
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 200
+
+    updated_signal = response.json()
+
+    assert updated_signal["signal_type"] == "Sell"
+    assert updated_signal["target_price"] == "150.000000"
+    assert updated_signal["trigger_direction"] == "Below"
+    assert updated_signal["rationale"] == (
+        "Updated test signal."
+    )
+
+
+def test_delete_market_signal():
+    asset = create_test_asset()
+    signal = create_test_signal(asset["id"])
+
+    response = client.delete(
+        (
+            f"/assets/{asset['id']}"
+            f"/signals/{signal['id']}"
+        )
+    )
+
+    assert response.status_code == 204
+
+    list_response = client.get(
+        f"/assets/{asset['id']}/signals"
+    )
+
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+
+def test_get_missing_market_signal():
+    asset = create_test_asset()
+
+    response = client.get(
+        f"/assets/{asset['id']}/signals/999"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Market signal not found."
     }

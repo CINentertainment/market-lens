@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import (
@@ -480,3 +480,358 @@ def get_asset_analytics(
         "symbol": asset.symbol,
         **analytics_result,
     }
+def get_market_signal_or_404(
+    asset_id: int,
+    signal_id: int,
+    database: Session,
+) -> models.MarketSignal:
+    signal = database.get(
+        models.MarketSignal,
+        signal_id,
+    )
+
+    if (
+        signal is None
+        or signal.asset_id != asset_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Market signal not found.",
+        )
+
+    return signal
+
+
+def get_latest_price_bar(
+    asset_id: int,
+    database: Session,
+) -> models.PriceBar | None:
+    return database.scalar(
+        select(models.PriceBar)
+        .where(
+            models.PriceBar.asset_id
+            == asset_id
+        )
+        .order_by(
+            models.PriceBar.trading_date.desc()
+        )
+        .limit(1)
+    )
+
+
+def evaluate_market_signal(
+    signal: models.MarketSignal,
+    latest_price_bar: models.PriceBar | None,
+) -> bool:
+    if (
+        not signal.is_active
+        or signal.is_triggered
+        or signal.target_price is None
+        or signal.trigger_direction is None
+        or latest_price_bar is None
+    ):
+        return False
+
+    current_price = (
+        latest_price_bar.close_price
+    )
+
+    should_trigger = (
+        signal.trigger_direction == "Above"
+        and current_price
+        >= signal.target_price
+    ) or (
+        signal.trigger_direction == "Below"
+        and current_price
+        <= signal.target_price
+    )
+
+    if not should_trigger:
+        return False
+
+    signal.is_triggered = True
+    signal.triggered_at = datetime.utcnow()
+
+    return True
+
+
+def validate_signal_trigger_pair(
+    target_price,
+    trigger_direction,
+) -> None:
+    has_target_price = (
+        target_price is not None
+    )
+
+    has_trigger_direction = (
+        trigger_direction is not None
+    )
+
+    if (
+        has_target_price
+        != has_trigger_direction
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "Target price and trigger direction "
+                "must be provided together."
+            ),
+        )
+
+
+@app.post(
+    "/assets/{asset_id}/signals",
+    response_model=schemas.MarketSignalResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_market_signal(
+    asset_id: int,
+    signal_data: schemas.MarketSignalCreate,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    signal = models.MarketSignal(
+        asset_id=asset_id,
+        **signal_data.model_dump(),
+    )
+
+    latest_price_bar = get_latest_price_bar(
+        asset_id,
+        database,
+    )
+
+    evaluate_market_signal(
+        signal,
+        latest_price_bar,
+    )
+
+    database.add(signal)
+    database.commit()
+    database.refresh(signal)
+
+    return signal
+
+
+@app.get(
+    "/assets/{asset_id}/signals",
+    response_model=list[
+        schemas.MarketSignalResponse
+    ],
+)
+def list_market_signals(
+    asset_id: int,
+    include_inactive: bool = True,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    statement = select(
+        models.MarketSignal
+    ).where(
+        models.MarketSignal.asset_id
+        == asset_id
+    )
+
+    if not include_inactive:
+        statement = statement.where(
+            models.MarketSignal.is_active
+            .is_(True)
+        )
+
+    statement = statement.order_by(
+        models.MarketSignal.created_at.desc(),
+        models.MarketSignal.id.desc(),
+    )
+
+    signals = database.scalars(
+        statement
+    ).all()
+
+    latest_price_bar = get_latest_price_bar(
+        asset_id,
+        database,
+    )
+
+    signal_was_triggered = False
+
+    for signal in signals:
+        if evaluate_market_signal(
+            signal,
+            latest_price_bar,
+        ):
+            signal_was_triggered = True
+
+    if signal_was_triggered:
+        database.commit()
+
+        for signal in signals:
+            database.refresh(signal)
+
+    return signals
+
+
+@app.get(
+    "/assets/{asset_id}/signals/{signal_id}",
+    response_model=schemas.MarketSignalResponse,
+)
+def get_market_signal(
+    asset_id: int,
+    signal_id: int,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    signal = get_market_signal_or_404(
+        asset_id,
+        signal_id,
+        database,
+    )
+
+    latest_price_bar = get_latest_price_bar(
+        asset_id,
+        database,
+    )
+
+    if evaluate_market_signal(
+        signal,
+        latest_price_bar,
+    ):
+        database.commit()
+        database.refresh(signal)
+
+    return signal
+
+
+@app.patch(
+    "/assets/{asset_id}/signals/{signal_id}",
+    response_model=schemas.MarketSignalResponse,
+)
+def update_market_signal(
+    asset_id: int,
+    signal_id: int,
+    signal_data: schemas.MarketSignalUpdate,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    signal = get_market_signal_or_404(
+        asset_id,
+        signal_id,
+        database,
+    )
+
+    updates = signal_data.model_dump(
+        exclude_unset=True
+    )
+
+    if (
+        "signal_type" in updates
+        and updates["signal_type"] is None
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail="signal_type cannot be null.",
+        )
+
+    if (
+        "is_active" in updates
+        and updates["is_active"] is None
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail="is_active cannot be null.",
+        )
+
+    updated_target_price = updates.get(
+        "target_price",
+        signal.target_price,
+    )
+
+    updated_trigger_direction = updates.get(
+        "trigger_direction",
+        signal.trigger_direction,
+    )
+
+    validate_signal_trigger_pair(
+        updated_target_price,
+        updated_trigger_direction,
+    )
+
+    trigger_configuration_changed = (
+        "target_price" in updates
+        or "trigger_direction" in updates
+    )
+
+    for field_name, value in updates.items():
+        setattr(
+            signal,
+            field_name,
+            value,
+        )
+
+    if trigger_configuration_changed:
+        signal.is_triggered = False
+        signal.triggered_at = None
+
+    latest_price_bar = get_latest_price_bar(
+        asset_id,
+        database,
+    )
+
+    evaluate_market_signal(
+        signal,
+        latest_price_bar,
+    )
+
+    database.commit()
+    database.refresh(signal)
+
+    return signal
+
+
+@app.delete(
+    "/assets/{asset_id}/signals/{signal_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_market_signal(
+    asset_id: int,
+    signal_id: int,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    signal = get_market_signal_or_404(
+        asset_id,
+        signal_id,
+        database,
+    )
+
+    database.delete(signal)
+    database.commit()
+
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT
+    )

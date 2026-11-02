@@ -10,10 +10,15 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
 from app.database import Base
 
@@ -81,6 +86,13 @@ class MarketAsset(Base):
         cascade="all, delete-orphan",
     )
 
+    market_signals: Mapped[
+        list["MarketSignal"]
+    ] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+
 
 class PriceBar(Base):
     __tablename__ = "price_bars"
@@ -133,7 +145,9 @@ class PriceBar(Base):
         nullable=False,
     )
 
-    adjusted_close: Mapped[Decimal | None] = mapped_column(
+    adjusted_close: Mapped[
+        Decimal | None
+    ] = mapped_column(
         Numeric(18, 6),
         nullable=True,
     )
@@ -151,4 +165,86 @@ class PriceBar(Base):
 
     asset: Mapped["MarketAsset"] = relationship(
         back_populates="price_bars",
+    )
+
+
+class MarketSignal(Base):
+    __tablename__ = "market_signals"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    asset_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "market_assets.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    signal_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="Watch",
+    )
+
+    target_price: Mapped[
+        Decimal | None
+    ] = mapped_column(
+        Numeric(18, 6),
+        nullable=True,
+    )
+
+    trigger_direction: Mapped[
+        str | None
+    ] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    rationale: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="1",
+    )
+
+    is_triggered: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+    )
+
+    triggered_at: Mapped[
+        datetime | None
+    ] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    asset: Mapped["MarketAsset"] = relationship(
+        back_populates="market_signals",
     )

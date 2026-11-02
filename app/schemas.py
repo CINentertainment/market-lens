@@ -216,3 +216,120 @@ class MarketAnalyticsResponse(BaseModel):
     moving_average_50: float | None
     annualized_volatility_percent: float | None
     trend: str
+SignalType = Literal[
+    "Watch",
+    "Buy",
+    "Sell",
+    "Review",
+]
+
+TriggerDirection = Literal[
+    "Above",
+    "Below",
+]
+
+
+class MarketSignalBase(BaseModel):
+    signal_type: SignalType = "Watch"
+
+    target_price: Decimal | None = Field(
+        default=None,
+        gt=0,
+        decimal_places=6,
+    )
+
+    trigger_direction: (
+        TriggerDirection | None
+    ) = None
+
+    rationale: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+    is_active: bool = True
+
+    @field_validator("rationale")
+    @classmethod
+    def normalize_rationale(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+
+        return normalized_value or None
+
+    @model_validator(mode="after")
+    def validate_price_trigger(self) -> Self:
+        has_target_price = (
+            self.target_price is not None
+        )
+
+        has_trigger_direction = (
+            self.trigger_direction is not None
+        )
+
+        if (
+            has_target_price
+            != has_trigger_direction
+        ):
+            raise ValueError(
+                "Target price and trigger direction "
+                "must be provided together."
+            )
+
+        return self
+
+
+class MarketSignalCreate(MarketSignalBase):
+    pass
+
+
+class MarketSignalUpdate(BaseModel):
+    signal_type: SignalType | None = None
+
+    target_price: Decimal | None = Field(
+        default=None,
+        gt=0,
+        decimal_places=6,
+    )
+
+    trigger_direction: (
+        TriggerDirection | None
+    ) = None
+
+    rationale: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+    is_active: bool | None = None
+
+    @field_validator("rationale")
+    @classmethod
+    def normalize_rationale(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+
+        return normalized_value or None
+
+
+class MarketSignalResponse(MarketSignalBase):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+    id: int
+    asset_id: int
+    is_triggered: bool
+    triggered_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
