@@ -774,3 +774,66 @@ footer {
         padding: 15px;
     }
 }
+.analytics-panel {
+    margin-bottom: 16px;
+}
+
+.analytics-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.analytics-metric {
+    min-height: 86px;
+    padding: 16px;
+    border: 1px solid #30364d;
+    border-radius: 10px;
+    background:
+        linear-gradient(
+            145deg,
+            rgba(139, 92, 246, 0.08),
+            rgba(10, 11, 20, 0.4)
+        );
+}
+
+.analytics-metric span {
+    display: block;
+    margin-bottom: 8px;
+    color: #8f9ac1;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.analytics-metric strong {
+    color: #f7f4ff;
+    font-size: 1rem;
+    line-height: 1.3;
+}
+
+.analytics-metric strong.positive-value {
+    color: #76e6d8;
+}
+
+.analytics-metric strong.negative-value {
+    color: #ff7f96;
+}
+
+.analytics-metric strong.neutral-value {
+    color: #b79cff;
+}
+
+@media (max-width: 900px) {
+    .analytics-summary-grid {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .analytics-summary-grid {
+        grid-template-columns: 1fr;
+    }
+}

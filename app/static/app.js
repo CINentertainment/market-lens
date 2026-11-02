@@ -53,6 +53,25 @@ const elements = {
     latestPriceSummary: document.querySelector(
         "#latestPriceSummary"
     ),
+    analyticsTrend: document.querySelector(
+        "#analyticsTrend"
+    ),
+    analyticsTotalReturn: document.querySelector(
+        "#analyticsTotalReturn"
+    ),
+    analyticsDailyChange: document.querySelector(
+        "#analyticsDailyChange"
+    ),
+    analyticsMovingAverage20: document.querySelector(
+        "#analyticsMovingAverage20"
+    ),
+    analyticsMovingAverage50: document.querySelector(
+        "#analyticsMovingAverage50"
+    ),
+    analyticsVolatility: document.querySelector(
+        "#analyticsVolatility"
+    ),
+
     refreshPricesButton: document.querySelector(
         "#refreshPricesButton"
     ),
@@ -139,9 +158,11 @@ function formatVolume(value) {
 
 function toDateInputValue(date) {
     const year = date.getFullYear();
+
     const month = String(
         date.getMonth() + 1
     ).padStart(2, "0");
+
     const day = String(
         date.getDate()
     ).padStart(2, "0");
@@ -159,6 +180,7 @@ function setDefaultSyncDates() {
     elements.syncStartDate.value = toDateInputValue(
         startDate
     );
+
     elements.syncEndDate.value = toDateInputValue(
         endDate
     );
@@ -169,6 +191,7 @@ function showToast(message, isError = false) {
     window.clearTimeout(toastTimer);
 
     elements.toast.textContent = message;
+
     elements.toast.classList.remove(
         "hidden",
         "error"
@@ -218,7 +241,7 @@ async function apiRequest(url, options = {}) {
                     .join(" ");
             }
         } catch {
-            // Preserve the default message when no JSON exists.
+            // Keep the default message when no JSON exists.
         }
 
         throw new Error(message);
@@ -306,7 +329,11 @@ function renderStatistics() {
     elements.trackedAssets.textContent = (
         state.assets.length
     );
-    elements.activeAssets.textContent = activeCount;
+
+    elements.activeAssets.textContent = (
+        activeCount
+    );
+
     elements.storedPrices.textContent = (
         storedPriceCount
     );
@@ -355,7 +382,10 @@ function getFilteredAssets() {
                 || asset.asset_type === selectedType
             );
 
-            return matchesSearch && matchesType;
+            return (
+                matchesSearch
+                && matchesType
+            );
         }
     );
 }
@@ -508,18 +538,23 @@ async function createAsset(event) {
         symbol: elements.assetSymbol.value
             .trim()
             .toUpperCase(),
+
         name: (
             elements.assetName.value.trim()
             || null
         ),
+
         asset_type: elements.assetType.value,
+
         exchange: (
             elements.assetExchange.value.trim()
             || null
         ),
+
         currency: elements.assetCurrency.value
             .trim()
             .toUpperCase(),
+
         is_active: (
             elements.assetActive.value === "true"
         ),
@@ -551,14 +586,158 @@ async function createAsset(event) {
 }
 
 
+function getAnalyticsValueClass(value) {
+    if (value === null || value === undefined) {
+        return "neutral-value";
+    }
+
+    const numericValue = Number(value);
+
+    if (numericValue > 0) {
+        return "positive-value";
+    }
+
+    if (numericValue < 0) {
+        return "negative-value";
+    }
+
+    return "neutral-value";
+}
+
+
+function setAnalyticsMetric(
+    element,
+    text,
+    valueClass = "neutral-value"
+) {
+    element.textContent = text;
+
+    element.classList.remove(
+        "positive-value",
+        "negative-value",
+        "neutral-value"
+    );
+
+    element.classList.add(valueClass);
+}
+
+
+function formatAnalyticsPercent(
+    value,
+    includeSign = false
+) {
+    if (value === null || value === undefined) {
+        return "—";
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return "—";
+    }
+
+    const sign = (
+        includeSign && numericValue > 0
+            ? "+"
+            : ""
+    );
+
+    return `${sign}${numericValue.toFixed(2)}%`;
+}
+
+
+function renderAnalytics(asset, analyticsData) {
+    const trend = (
+        analyticsData.trend || "Insufficient Data"
+    );
+
+    const normalizedTrend = trend.toLowerCase();
+    let trendClass = "neutral-value";
+
+    if (normalizedTrend.includes("bullish")) {
+        trendClass = "positive-value";
+    } else if (
+        normalizedTrend.includes("bearish")
+    ) {
+        trendClass = "negative-value";
+    }
+
+    setAnalyticsMetric(
+        elements.analyticsTrend,
+        trend,
+        trendClass
+    );
+
+    setAnalyticsMetric(
+        elements.analyticsTotalReturn,
+        formatAnalyticsPercent(
+            analyticsData.total_return_percent,
+            true
+        ),
+        getAnalyticsValueClass(
+            analyticsData.total_return_percent
+        )
+    );
+
+    setAnalyticsMetric(
+        elements.analyticsDailyChange,
+        formatAnalyticsPercent(
+            analyticsData.daily_change_percent,
+            true
+        ),
+        getAnalyticsValueClass(
+            analyticsData.daily_change_percent
+        )
+    );
+
+    setAnalyticsMetric(
+        elements.analyticsMovingAverage20,
+        analyticsData.moving_average_20 === null
+            ? "Insufficient Data"
+            : formatPrice(
+                analyticsData.moving_average_20,
+                asset.currency
+            ),
+        "neutral-value"
+    );
+
+    setAnalyticsMetric(
+        elements.analyticsMovingAverage50,
+        analyticsData.moving_average_50 === null
+            ? "Insufficient Data"
+            : formatPrice(
+                analyticsData.moving_average_50,
+                asset.currency
+            ),
+        "neutral-value"
+    );
+
+    setAnalyticsMetric(
+        elements.analyticsVolatility,
+        formatAnalyticsPercent(
+            analyticsData
+                .annualized_volatility_percent
+        ),
+        "neutral-value"
+    );
+}
+
+
 async function selectAsset(
     assetId,
     scrollToWorkspace = true
 ) {
     try {
-        const [asset, priceBars] = await Promise.all([
+        const [
+            asset,
+            priceBars,
+            analyticsData,
+        ] = await Promise.all([
             apiRequest(`/assets/${assetId}`),
             apiRequest(`/assets/${assetId}/prices`),
+            apiRequest(
+                `/assets/${assetId}/analytics`
+            ),
         ]);
 
         state.selectedAssetId = assetId;
@@ -576,6 +755,7 @@ async function selectAsset(
         elements.selectedAssetSummary.innerHTML = `
             <div class="summary-item">
                 <span>Asset Name</span>
+
                 <strong>
                     ${escapeHtml(
                         asset.name || "Unnamed asset"
@@ -585,6 +765,7 @@ async function selectAsset(
 
             <div class="summary-item">
                 <span>Asset Type</span>
+
                 <strong>
                     ${escapeHtml(asset.asset_type)}
                 </strong>
@@ -592,6 +773,7 @@ async function selectAsset(
 
             <div class="summary-item">
                 <span>Exchange</span>
+
                 <strong>
                     ${escapeHtml(
                         asset.exchange || "Not specified"
@@ -601,6 +783,7 @@ async function selectAsset(
 
             <div class="summary-item">
                 <span>Currency</span>
+
                 <strong>
                     ${escapeHtml(asset.currency)}
                 </strong>
@@ -611,6 +794,7 @@ async function selectAsset(
 
         renderStatistics();
         renderLatestPrice(asset);
+        renderAnalytics(asset, analyticsData);
         renderPriceTable(asset);
         renderPriceChart(asset);
 
@@ -662,8 +846,10 @@ async function synchronizePrices(event) {
         return;
     }
 
-    const submitButton = elements.syncForm.querySelector(
-        'button[type="submit"]'
+    const submitButton = (
+        elements.syncForm.querySelector(
+            'button[type="submit"]'
+        )
     );
 
     const originalText = submitButton.textContent;
@@ -707,6 +893,7 @@ async function synchronizePrices(event) {
         );
 
         await loadAssets();
+
         await selectAsset(
             state.selectedAssetId,
             false
@@ -764,6 +951,7 @@ function renderLatestPrice(asset) {
         const latestClose = Number(
             latest.close_price
         );
+
         const previousClose = Number(
             previous.close_price
         );
@@ -790,6 +978,7 @@ function renderLatestPrice(asset) {
     elements.latestPriceSummary.innerHTML = `
         <div class="price-metric">
             <span>Trading Date</span>
+
             <strong>
                 ${formatDate(latest.trading_date)}
             </strong>
@@ -797,6 +986,7 @@ function renderLatestPrice(asset) {
 
         <div class="price-metric">
             <span>Close</span>
+
             <strong>
                 ${formatPrice(
                     latest.close_price,
@@ -807,6 +997,7 @@ function renderLatestPrice(asset) {
 
         <div class="price-metric">
             <span>Daily Change</span>
+
             <strong>
                 ${escapeHtml(changeText)}
             </strong>
@@ -814,6 +1005,7 @@ function renderLatestPrice(asset) {
 
         <div class="price-metric">
             <span>Daily High</span>
+
             <strong>
                 ${formatPrice(
                     latest.high_price,
@@ -824,6 +1016,7 @@ function renderLatestPrice(asset) {
 
         <div class="price-metric">
             <span>Daily Low</span>
+
             <strong>
                 ${formatPrice(
                     latest.low_price,
@@ -834,6 +1027,7 @@ function renderLatestPrice(asset) {
 
         <div class="price-metric">
             <span>Volume</span>
+
             <strong>
                 ${formatVolume(latest.volume)}
             </strong>
@@ -949,12 +1143,16 @@ function renderPriceChart(asset) {
         maximumPrice += 1;
     }
 
-    const priceRange = maximumPrice - minimumPrice;
+    const priceRange = (
+        maximumPrice - minimumPrice
+    );
+
     const usableWidth = (
         chartWidth
         - leftPadding
         - rightPadding
     );
+
     const usableHeight = (
         chartHeight
         - topPadding
@@ -1011,8 +1209,11 @@ function renderPriceChart(asset) {
     ].join(" ");
 
     const firstDate = priceBars[0].trading_date;
+
     const lastDate = (
-        priceBars[priceBars.length - 1].trading_date
+        priceBars[
+            priceBars.length - 1
+        ].trading_date
     );
 
     const pointElements = points
@@ -1171,7 +1372,9 @@ async function deleteAsset(assetId) {
             closeWorkspace();
         }
 
-        showToast(`${asset.symbol} was deleted.`);
+        showToast(
+            `${asset.symbol} was deleted.`
+        );
 
         await loadAssets();
     } catch (error) {
@@ -1227,7 +1430,9 @@ async function refreshSelectedPrices() {
         false
     );
 
-    showToast("Price history refreshed.");
+    showToast(
+        "Price history and analytics refreshed."
+    );
 }
 
 
