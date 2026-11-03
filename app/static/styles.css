@@ -1645,3 +1645,41 @@ footer {
         padding: 15px;
     }
 }
+/* Portfolio export actions */
+
+.portfolio-export-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.portfolio-export-actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+@media (max-width: 760px) {
+    .portfolio-export-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .portfolio-export-actions a,
+    .portfolio-export-actions button {
+        flex: 1 1 145px;
+    }
+}
+
+@media (max-width: 460px) {
+    .portfolio-export-actions {
+        flex-direction: column;
+    }
+
+    .portfolio-export-actions a,
+    .portfolio-export-actions button {
+        width: 100%;
+    }
+}

@@ -1492,3 +1492,132 @@ def test_portfolio_summary_includes_realized_gain():
 
     assert summary["positions"][0]["symbol"] == "AAPL"
     assert summary["positions"][0]["is_open"] is False
+def test_export_portfolio_json():
+    asset = create_test_asset()
+    create_test_price(asset["id"])
+
+    position_response = client.post(
+        f"/assets/{asset['id']}/positions",
+        json={
+            "position_type": "Long",
+            "quantity": "2",
+            "entry_price": "100",
+            "opened_date": "2026-10-20",
+            "notes": "JSON export test.",
+        },
+    )
+
+    assert position_response.status_code == 201
+
+    response = client.get(
+        "/portfolio/export.json"
+    )
+
+    assert response.status_code == 200
+
+    assert response.headers[
+        "content-type"
+    ].startswith("application/json")
+
+    assert (
+        "market-lens-portfolio.json"
+        in response.headers[
+            "content-disposition"
+        ]
+    )
+
+    export_data = response.json()
+
+    assert export_data[
+        "open_position_count"
+    ] == 1
+
+    assert export_data[
+        "total_position_count"
+    ] == 1
+
+    assert export_data[
+        "positions"
+    ][0]["symbol"] == "AAPL"
+
+
+def test_export_portfolio_csv():
+    asset = create_test_asset()
+    create_test_price(asset["id"])
+
+    position_response = client.post(
+        f"/assets/{asset['id']}/positions",
+        json={
+            "position_type": "Long",
+            "quantity": "2",
+            "entry_price": "100",
+            "opened_date": "2026-10-20",
+            "notes": "CSV export test.",
+        },
+    )
+
+    assert position_response.status_code == 201
+
+    response = client.get(
+        "/portfolio/export.csv"
+    )
+
+    assert response.status_code == 200
+
+    assert response.headers[
+        "content-type"
+    ].startswith("text/csv")
+
+    assert (
+        "market-lens-portfolio.csv"
+        in response.headers[
+            "content-disposition"
+        ]
+    )
+
+    assert "Symbol,Asset Name" in response.text
+    assert "AAPL" in response.text
+    assert "CSV export test." in response.text
+
+
+def test_view_portfolio_report():
+    asset = create_test_asset()
+    create_test_price(asset["id"])
+
+    position_response = client.post(
+        f"/assets/{asset['id']}/positions",
+        json={
+            "position_type": "Long",
+            "quantity": "2",
+            "entry_price": "100",
+            "opened_date": "2026-10-20",
+            "notes": "HTML report test.",
+        },
+    )
+
+    assert position_response.status_code == 201
+
+    response = client.get(
+        "/portfolio/report"
+    )
+
+    assert response.status_code == 200
+
+    assert response.headers[
+        "content-type"
+    ].startswith("text/html")
+
+    assert (
+        "market-lens-portfolio-report.html"
+        in response.headers[
+            "content-disposition"
+        ]
+    )
+
+    assert (
+        "Market Lens Portfolio Report"
+        in response.text
+    )
+
+    assert "Portfolio by Asset" in response.text
+    assert "AAPL" in response.text

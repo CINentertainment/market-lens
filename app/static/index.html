@@ -71,13 +71,40 @@
                     <h2>Portfolio Overview</h2>
                 </div>
 
-                <button
-                    id="refreshPortfolioButton"
-                    class="secondary-button"
-                    type="button"
-                >
-                    Refresh Portfolio
-                </button>
+                <div class="portfolio-export-actions">
+                    <a
+                        class="secondary-button"
+                        href="/portfolio/report"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        View Report
+                    </a>
+
+                    <a
+                        class="secondary-button"
+                        href="/portfolio/export.csv"
+                        download
+                    >
+                        Export CSV
+                    </a>
+
+                    <a
+                        class="secondary-button"
+                        href="/portfolio/export.json"
+                        download
+                    >
+                        Export JSON
+                    </a>
+
+                    <button
+                        id="refreshPortfolioButton"
+                        class="secondary-button"
+                        type="button"
+                    >
+                        Refresh Portfolio
+                    </button>
+                </div>
             </div>
 
             <div class="global-portfolio-summary">

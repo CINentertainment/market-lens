@@ -9,13 +9,23 @@ from fastapi import (
     Response,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import analytics, models, schemas
+from app import (
+    analytics,
+    models,
+    reporting,
+    schemas,
+)
 from app.database import Base, engine, get_db
 from app.providers import yahoo_finance
 
@@ -1358,3 +1368,71 @@ def get_portfolio_summary(
         "assets": ordered_asset_summaries,
         "positions": portfolio_positions,
     }
+@app.get(
+    "/portfolio/export.json",
+    include_in_schema=False,
+)
+def export_portfolio_json(
+    database: Session = Depends(get_db),
+):
+    summary = get_portfolio_summary(database)
+
+    return JSONResponse(
+        content=jsonable_encoder(summary),
+        headers={
+            "Content-Disposition": (
+                "attachment; "
+                'filename="market-lens-portfolio.json"'
+            ),
+        },
+    )
+
+
+@app.get(
+    "/portfolio/export.csv",
+    include_in_schema=False,
+)
+def export_portfolio_csv(
+    database: Session = Depends(get_db),
+):
+    summary = get_portfolio_summary(database)
+
+    csv_content = reporting.build_portfolio_csv(
+        summary
+    )
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                "attachment; "
+                'filename="market-lens-portfolio.csv"'
+            ),
+        },
+    )
+
+
+@app.get(
+    "/portfolio/report",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+def view_portfolio_report(
+    database: Session = Depends(get_db),
+):
+    summary = get_portfolio_summary(database)
+
+    html_content = reporting.build_portfolio_html(
+        summary
+    )
+
+    return HTMLResponse(
+        content=html_content,
+        headers={
+            "Content-Disposition": (
+                "inline; "
+                'filename="market-lens-portfolio-report.html"'
+            ),
+        },
+    )
