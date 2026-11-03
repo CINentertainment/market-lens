@@ -442,3 +442,45 @@ class PaperPositionResponse(PaperPositionBase):
 
     created_at: datetime
     updated_at: datetime
+class PortfolioPositionResponse(
+    PaperPositionResponse
+):
+    symbol: str
+    asset_name: str | None
+    currency: str
+
+
+class PortfolioAssetSummary(BaseModel):
+    asset_id: int
+    symbol: str
+    asset_name: str | None
+    currency: str
+
+    open_position_count: int = Field(ge=0)
+    closed_position_count: int = Field(ge=0)
+
+    entry_value: Decimal
+    market_value: Decimal
+    unrealized_gain_loss: Decimal
+    realized_gain_loss: Decimal
+
+
+class PortfolioSummaryResponse(BaseModel):
+    open_position_count: int = Field(ge=0)
+    closed_position_count: int = Field(ge=0)
+    total_position_count: int = Field(ge=0)
+
+    entry_value: Decimal
+    market_value: Decimal
+    unrealized_gain_loss: Decimal
+    realized_gain_loss: Decimal
+
+    assets: list[PortfolioAssetSummary] = Field(
+        default_factory=list
+    )
+
+    positions: list[
+        PortfolioPositionResponse
+    ] = Field(
+        default_factory=list
+    )

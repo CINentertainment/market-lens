@@ -61,7 +61,142 @@
                 <strong id="selectedSymbol">—</strong>
             </article>
         </section>
+        <section class="panel global-portfolio-panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">
+                        PORTFOLIO COMMAND VIEW
+                    </p>
 
+                    <h2>Portfolio Overview</h2>
+                </div>
+
+                <button
+                    id="refreshPortfolioButton"
+                    class="secondary-button"
+                    type="button"
+                >
+                    Refresh Portfolio
+                </button>
+            </div>
+
+            <div class="global-portfolio-summary">
+                <div class="global-portfolio-metric">
+                    <span>Open Positions</span>
+
+                    <strong id="globalOpenPositions">
+                        0
+                    </strong>
+                </div>
+
+                <div class="global-portfolio-metric">
+                    <span>Total Positions</span>
+
+                    <strong id="globalTotalPositions">
+                        0
+                    </strong>
+                </div>
+
+                <div class="global-portfolio-metric">
+                    <span>Entry Value</span>
+
+                    <strong id="globalEntryValue">
+                        —
+                    </strong>
+                </div>
+
+                <div class="global-portfolio-metric">
+                    <span>Market Value</span>
+
+                    <strong id="globalMarketValue">
+                        —
+                    </strong>
+                </div>
+
+                <div class="global-portfolio-metric">
+                    <span>Unrealized Gain / Loss</span>
+
+                    <strong
+                        id="globalUnrealizedGainLoss"
+                        class="neutral-value"
+                    >
+                        —
+                    </strong>
+                </div>
+
+                <div class="global-portfolio-metric">
+                    <span>Realized Gain / Loss</span>
+
+                    <strong
+                        id="globalRealizedGainLoss"
+                        class="neutral-value"
+                    >
+                        —
+                    </strong>
+                </div>
+            </div>
+
+            <div class="global-portfolio-content">
+                <section class="portfolio-breakdown-section">
+                    <div class="section-heading">
+                        <div>
+                            <p class="eyebrow">
+                                ASSET EXPOSURE
+                            </p>
+
+                            <h3>Portfolio by Asset</h3>
+                        </div>
+                    </div>
+
+                    <div
+                        id="globalPortfolioAssets"
+                        class="global-portfolio-assets"
+                    >
+                        <p class="empty-state">
+                            No portfolio assets available.
+                        </p>
+                    </div>
+                </section>
+
+                <section class="portfolio-register-section">
+                    <div class="section-heading">
+                        <div>
+                            <p class="eyebrow">
+                                CONSOLIDATED REGISTER
+                            </p>
+
+                            <h3>All Paper Positions</h3>
+                        </div>
+
+                        <select
+                            id="globalPositionFilter"
+                            aria-label="Filter consolidated positions"
+                        >
+                            <option value="all">
+                                All Positions
+                            </option>
+
+                            <option value="open">
+                                Open Positions
+                            </option>
+
+                            <option value="closed">
+                                Closed Positions
+                            </option>
+                        </select>
+                    </div>
+
+                    <div
+                        id="globalPositionList"
+                        class="global-position-list"
+                    >
+                        <p class="empty-state">
+                            No paper positions are available.
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </section>
         <section class="workspace-grid">
             <article class="panel asset-form-panel">
                 <div class="panel-heading">
@@ -848,5 +983,6 @@
     ></div>
 
     <script src="/static/app.js"></script>
+    <script src="/static/portfolio.js"></script>
 </body>
 </html>

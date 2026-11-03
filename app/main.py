@@ -1204,3 +1204,157 @@ def delete_paper_position(
     return Response(
         status_code=status.HTTP_204_NO_CONTENT
     )
+@app.get(
+    "/portfolio/summary",
+    response_model=schemas.PortfolioSummaryResponse,
+)
+def get_portfolio_summary(
+    database: Session = Depends(get_db),
+):
+    positions = database.scalars(
+        select(models.PaperPosition)
+        .order_by(
+            models.PaperPosition.is_open.desc(),
+            models.PaperPosition.opened_date.desc(),
+            models.PaperPosition.id.desc(),
+        )
+    ).all()
+
+    assets = database.scalars(
+        select(models.MarketAsset)
+    ).all()
+
+    assets_by_id = {
+        asset.id: asset
+        for asset in assets
+    }
+
+    open_position_count = 0
+    closed_position_count = 0
+
+    entry_value = Decimal("0")
+    market_value = Decimal("0")
+    unrealized_gain_loss = Decimal("0")
+    realized_gain_loss = Decimal("0")
+
+    asset_summaries: dict[int, dict] = {}
+    portfolio_positions: list[dict] = []
+
+    for position in positions:
+        asset = assets_by_id.get(position.asset_id)
+
+        if asset is None:
+            continue
+
+        position_response = (
+            build_paper_position_response(
+                position,
+                database,
+            )
+        )
+
+        portfolio_positions.append(
+            {
+                **position_response,
+                "symbol": asset.symbol,
+                "asset_name": asset.name,
+                "currency": asset.currency,
+            }
+        )
+
+        if asset.id not in asset_summaries:
+            asset_summaries[asset.id] = {
+                "asset_id": asset.id,
+                "symbol": asset.symbol,
+                "asset_name": asset.name,
+                "currency": asset.currency,
+                "open_position_count": 0,
+                "closed_position_count": 0,
+                "entry_value": Decimal("0"),
+                "market_value": Decimal("0"),
+                "unrealized_gain_loss": Decimal("0"),
+                "realized_gain_loss": Decimal("0"),
+            }
+
+        asset_summary = asset_summaries[asset.id]
+
+        if position.is_open:
+            open_position_count += 1
+            asset_summary[
+                "open_position_count"
+            ] += 1
+
+            position_entry_value = Decimal(
+                position_response["entry_value"]
+            )
+
+            position_market_value = Decimal(
+                position_response["market_value"]
+                or 0
+            )
+
+            position_unrealized = Decimal(
+                position_response[
+                    "unrealized_gain_loss"
+                ]
+                or 0
+            )
+
+            entry_value += position_entry_value
+            market_value += position_market_value
+            unrealized_gain_loss += (
+                position_unrealized
+            )
+
+            asset_summary[
+                "entry_value"
+            ] += position_entry_value
+
+            asset_summary[
+                "market_value"
+            ] += position_market_value
+
+            asset_summary[
+                "unrealized_gain_loss"
+            ] += position_unrealized
+        else:
+            closed_position_count += 1
+            asset_summary[
+                "closed_position_count"
+            ] += 1
+
+            position_realized = Decimal(
+                position_response[
+                    "realized_gain_loss"
+                ]
+                or 0
+            )
+
+            realized_gain_loss += position_realized
+
+            asset_summary[
+                "realized_gain_loss"
+            ] += position_realized
+
+    ordered_asset_summaries = sorted(
+        asset_summaries.values(),
+        key=lambda summary: summary["symbol"],
+    )
+
+    return {
+        "open_position_count": open_position_count,
+        "closed_position_count": (
+            closed_position_count
+        ),
+        "total_position_count": len(
+            portfolio_positions
+        ),
+        "entry_value": entry_value,
+        "market_value": market_value,
+        "unrealized_gain_loss": (
+            unrealized_gain_loss
+        ),
+        "realized_gain_loss": realized_gain_loss,
+        "assets": ordered_asset_summaries,
+        "positions": portfolio_positions,
+    }

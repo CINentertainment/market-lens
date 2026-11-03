@@ -1323,3 +1323,172 @@ def test_create_position_for_missing_asset():
     assert response.json() == {
         "detail": "Market asset not found."
     }
+def test_get_empty_portfolio_summary():
+    response = client.get("/portfolio/summary")
+
+    assert response.status_code == 200
+
+    summary = response.json()
+
+    assert summary["open_position_count"] == 0
+    assert summary["closed_position_count"] == 0
+    assert summary["total_position_count"] == 0
+
+    assert Decimal(summary["entry_value"]) == Decimal("0")
+    assert Decimal(summary["market_value"]) == Decimal("0")
+
+    assert (
+        Decimal(summary["unrealized_gain_loss"])
+        == Decimal("0")
+    )
+
+    assert (
+        Decimal(summary["realized_gain_loss"])
+        == Decimal("0")
+    )
+
+    assert summary["assets"] == []
+    assert summary["positions"] == []
+
+
+def test_get_multi_asset_portfolio_summary():
+    apple = create_test_asset("AAPL")
+    microsoft = create_test_asset("MSFT")
+
+    create_test_price(apple["id"])
+    create_test_price(microsoft["id"])
+
+    apple_position_response = client.post(
+        f"/assets/{apple['id']}/positions",
+        json={
+            "position_type": "Long",
+            "quantity": "2",
+            "entry_price": "100",
+            "opened_date": "2026-10-20",
+            "notes": "Long Apple test position.",
+        },
+    )
+
+    assert apple_position_response.status_code == 201
+
+    microsoft_position_response = client.post(
+        f"/assets/{microsoft['id']}/positions",
+        json={
+            "position_type": "Short",
+            "quantity": "3",
+            "entry_price": "110",
+            "opened_date": "2026-10-21",
+            "notes": "Short Microsoft test position.",
+        },
+    )
+
+    assert microsoft_position_response.status_code == 201
+
+    response = client.get("/portfolio/summary")
+
+    assert response.status_code == 200
+
+    summary = response.json()
+
+    assert summary["open_position_count"] == 2
+    assert summary["closed_position_count"] == 0
+    assert summary["total_position_count"] == 2
+
+    assert (
+        Decimal(summary["entry_value"])
+        == Decimal("530")
+    )
+
+    assert (
+        Decimal(summary["market_value"])
+        == Decimal("517.5")
+    )
+
+    assert (
+        Decimal(summary["unrealized_gain_loss"])
+        == Decimal("26.5")
+    )
+
+    assert (
+        Decimal(summary["realized_gain_loss"])
+        == Decimal("0")
+    )
+
+    assert [
+        asset["symbol"]
+        for asset in summary["assets"]
+    ] == [
+        "AAPL",
+        "MSFT",
+    ]
+
+    assert {
+        position["symbol"]
+        for position in summary["positions"]
+    } == {
+        "AAPL",
+        "MSFT",
+    }
+
+
+def test_portfolio_summary_includes_realized_gain():
+    asset = create_test_asset()
+    create_test_price(asset["id"])
+
+    create_response = client.post(
+        f"/assets/{asset['id']}/positions",
+        json={
+            "position_type": "Long",
+            "quantity": "2",
+            "entry_price": "100",
+            "opened_date": "2026-10-20",
+            "notes": "Position to close.",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    position_id = create_response.json()["id"]
+
+    close_response = client.post(
+        (
+            f"/assets/{asset['id']}"
+            f"/positions/{position_id}/close"
+        ),
+        json={
+            "exit_price": "110",
+            "closed_date": "2026-10-27",
+        },
+    )
+
+    assert close_response.status_code == 200
+
+    response = client.get("/portfolio/summary")
+
+    assert response.status_code == 200
+
+    summary = response.json()
+
+    assert summary["open_position_count"] == 0
+    assert summary["closed_position_count"] == 1
+    assert summary["total_position_count"] == 1
+
+    assert Decimal(summary["entry_value"]) == Decimal("0")
+    assert Decimal(summary["market_value"]) == Decimal("0")
+
+    assert (
+        Decimal(summary["unrealized_gain_loss"])
+        == Decimal("0")
+    )
+
+    assert (
+        Decimal(summary["realized_gain_loss"])
+        == Decimal("20")
+    )
+
+    assert summary["assets"][0][
+        "closed_position_count"
+    ] == 1
+
+    assert summary["positions"][0]["symbol"] == "AAPL"
+    assert summary["positions"][0]["is_open"] is False
