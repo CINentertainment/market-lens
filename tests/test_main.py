@@ -105,7 +105,7 @@ def test_read_root():
     assert response.json() == {
         "application": "Market Lens",
         "status": "operational",
-        "version": "0.1.0",
+        "version": "1.0.0",
     }
 
 
@@ -123,7 +123,7 @@ def test_openapi_version():
 
     assert response.status_code == 200
     assert response.json()["info"]["version"] == (
-        "0.1.0"
+        "1.0.0"
     )
 
 

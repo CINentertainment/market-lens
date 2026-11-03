@@ -42,7 +42,7 @@ app = FastAPI(
         "A local market-intelligence and analytical "
         "tracking application."
     ),
-    version="0.1.0",
+    version="1.0.0",
 )
 
 app.mount(
@@ -82,7 +82,7 @@ def read_root():
     return {
         "application": "Market Lens",
         "status": "operational",
-        "version": "0.1.0",
+        "version": "1.0.0",
     }
 
 
