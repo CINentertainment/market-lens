@@ -3,6 +3,7 @@ const state = {
     assetDetails: new Map(),
     selectedAssetId: null,
     priceBars: [],
+    signals: [],
 };
 
 const elements = {
@@ -53,6 +54,7 @@ const elements = {
     latestPriceSummary: document.querySelector(
         "#latestPriceSummary"
     ),
+
     analyticsTrend: document.querySelector(
         "#analyticsTrend"
     ),
@@ -71,6 +73,34 @@ const elements = {
     analyticsVolatility: document.querySelector(
         "#analyticsVolatility"
     ),
+
+    signalForm: document.querySelector("#signalForm"),
+    signalType: document.querySelector("#signalType"),
+    signalDirection: document.querySelector(
+        "#signalDirection"
+    ),
+    signalTargetPrice: document.querySelector(
+        "#signalTargetPrice"
+    ),
+    signalStatus: document.querySelector(
+        "#signalStatus"
+    ),
+    signalRationale: document.querySelector(
+        "#signalRationale"
+    ),
+    refreshSignalsButton: document.querySelector(
+        "#refreshSignalsButton"
+    ),
+    activeSignalCount: document.querySelector(
+        "#activeSignalCount"
+    ),
+    triggeredSignalCount: document.querySelector(
+        "#triggeredSignalCount"
+    ),
+    totalSignalCount: document.querySelector(
+        "#totalSignalCount"
+    ),
+    signalList: document.querySelector("#signalList"),
 
     refreshPricesButton: document.querySelector(
         "#refreshPricesButton"
@@ -114,6 +144,30 @@ function formatDate(dateValue) {
 }
 
 
+function formatTimestamp(value) {
+    if (!value) {
+        return "Not triggered";
+    }
+
+    const timestamp = new Date(value);
+
+    if (Number.isNaN(timestamp.getTime())) {
+        return "Triggered";
+    }
+
+    return new Intl.DateTimeFormat(
+        "en-US",
+        {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+        }
+    ).format(timestamp);
+}
+
+
 function formatPrice(value, currency = "USD") {
     if (value === null || value === undefined) {
         return "—";
@@ -153,6 +207,30 @@ function formatVolume(value) {
             maximumFractionDigits: 2,
         }
     ).format(Number(value));
+}
+
+
+function formatAnalyticsPercent(
+    value,
+    includeSign = false
+) {
+    if (value === null || value === undefined) {
+        return "—";
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return "—";
+    }
+
+    const sign = (
+        includeSign && numericValue > 0
+            ? "+"
+            : ""
+    );
+
+    return `${sign}${numericValue.toFixed(2)}%`;
 }
 
 
@@ -241,7 +319,7 @@ async function apiRequest(url, options = {}) {
                     .join(" ");
             }
         } catch {
-            // Keep the default message when no JSON exists.
+            // Use the default error message.
         }
 
         throw new Error(message);
@@ -330,9 +408,7 @@ function renderStatistics() {
         state.assets.length
     );
 
-    elements.activeAssets.textContent = (
-        activeCount
-    );
+    elements.activeAssets.textContent = activeCount;
 
     elements.storedPrices.textContent = (
         storedPriceCount
@@ -622,30 +698,6 @@ function setAnalyticsMetric(
 }
 
 
-function formatAnalyticsPercent(
-    value,
-    includeSign = false
-) {
-    if (value === null || value === undefined) {
-        return "—";
-    }
-
-    const numericValue = Number(value);
-
-    if (!Number.isFinite(numericValue)) {
-        return "—";
-    }
-
-    const sign = (
-        includeSign && numericValue > 0
-            ? "+"
-            : ""
-    );
-
-    return `${sign}${numericValue.toFixed(2)}%`;
-}
-
-
 function renderAnalytics(asset, analyticsData) {
     const trend = (
         analyticsData.trend || "Insufficient Data"
@@ -732,16 +784,21 @@ async function selectAsset(
             asset,
             priceBars,
             analyticsData,
+            signals,
         ] = await Promise.all([
             apiRequest(`/assets/${assetId}`),
             apiRequest(`/assets/${assetId}/prices`),
             apiRequest(
                 `/assets/${assetId}/analytics`
             ),
+            apiRequest(
+                `/assets/${assetId}/signals`
+            ),
         ]);
 
         state.selectedAssetId = assetId;
         state.priceBars = priceBars;
+        state.signals = signals;
         state.assetDetails.set(assetId, asset);
 
         elements.analysisWorkspace.classList.remove(
@@ -795,6 +852,7 @@ async function selectAsset(
         renderStatistics();
         renderLatestPrice(asset);
         renderAnalytics(asset, analyticsData);
+        renderSignals(asset);
         renderPriceTable(asset);
         renderPriceChart(asset);
 
@@ -813,10 +871,15 @@ async function selectAsset(
 function closeWorkspace() {
     state.selectedAssetId = null;
     state.priceBars = [];
+    state.signals = [];
 
     elements.analysisWorkspace.classList.add(
         "hidden"
     );
+
+    elements.signalForm.reset();
+    elements.signalType.value = "Watch";
+    elements.signalStatus.value = "true";
 
     renderStatistics();
 }
@@ -1420,6 +1483,333 @@ function handleAssetListClick(event) {
 }
 
 
+function renderSignals(asset) {
+    const signals = [...state.signals].sort(
+        (firstSignal, secondSignal) => {
+            if (
+                firstSignal.is_triggered
+                !== secondSignal.is_triggered
+            ) {
+                return firstSignal.is_triggered ? -1 : 1;
+            }
+
+            return secondSignal.id - firstSignal.id;
+        }
+    );
+
+    const activeCount = signals.filter(
+        (signal) => signal.is_active
+    ).length;
+
+    const triggeredCount = signals.filter(
+        (signal) => signal.is_triggered
+    ).length;
+
+    elements.activeSignalCount.textContent = activeCount;
+
+    elements.triggeredSignalCount.textContent = (
+        triggeredCount
+    );
+
+    elements.totalSignalCount.textContent = (
+        signals.length
+    );
+
+    if (signals.length === 0) {
+        elements.signalList.innerHTML = `
+            <p class="empty-state">
+                No market signals have been created.
+            </p>
+        `;
+
+        return;
+    }
+
+    elements.signalList.innerHTML = signals
+        .map((signal) => {
+            const hasPriceTrigger = (
+                signal.target_price !== null
+                && signal.trigger_direction !== null
+            );
+
+            const triggerText = hasPriceTrigger
+                ? (
+                    `${signal.trigger_direction} `
+                    + formatPrice(
+                        signal.target_price,
+                        asset.currency
+                    )
+                )
+                : "Manual monitoring";
+
+            const statusText = signal.is_triggered
+                ? "Triggered"
+                : signal.is_active
+                    ? "Active"
+                    : "Inactive";
+
+            const statusClass = signal.is_triggered
+                ? "triggered"
+                : signal.is_active
+                    ? "active"
+                    : "inactive";
+
+            const rationale = (
+                signal.rationale
+                || "No analytical rationale recorded."
+            );
+
+            const conditionStatus = signal.is_triggered
+                ? formatTimestamp(
+                    signal.triggered_at
+                )
+                : signal.is_active
+                    ? "Awaiting conditions"
+                    : "Monitoring paused";
+
+            return `
+                <article
+                    class="signal-card ${statusClass}"
+                >
+                    <div class="signal-card-heading">
+                        <div>
+                            <span class="signal-type">
+                                ${escapeHtml(
+                                    signal.signal_type
+                                )}
+                            </span>
+
+                            <strong>
+                                ${escapeHtml(triggerText)}
+                            </strong>
+                        </div>
+
+                        <span
+                            class="signal-status ${statusClass}"
+                        >
+                            ${escapeHtml(statusText)}
+                        </span>
+                    </div>
+
+                    <p class="signal-rationale">
+                        ${escapeHtml(rationale)}
+                    </p>
+
+                    <div class="signal-card-footer">
+                        <span>
+                            ${escapeHtml(conditionStatus)}
+                        </span>
+
+                        <button
+                            class="danger-button compact-button"
+                            type="button"
+                            data-signal-action="delete"
+                            data-signal-id="${signal.id}"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </article>
+            `;
+        })
+        .join("");
+}
+
+
+async function createSignal(event) {
+    event.preventDefault();
+
+    if (state.selectedAssetId === null) {
+        showToast(
+            "Select an asset before creating a signal.",
+            true
+        );
+
+        return;
+    }
+
+    const direction = (
+        elements.signalDirection.value
+    );
+
+    const targetPrice = (
+        elements.signalTargetPrice.value.trim()
+    );
+
+    if (
+        (direction && !targetPrice)
+        || (!direction && targetPrice)
+    ) {
+        showToast(
+            (
+                "Target price and trigger direction "
+                + "must be provided together."
+            ),
+            true
+        );
+
+        return;
+    }
+
+    const payload = {
+        signal_type: elements.signalType.value,
+
+        target_price: (
+            targetPrice || null
+        ),
+
+        trigger_direction: (
+            direction || null
+        ),
+
+        rationale: (
+            elements.signalRationale.value.trim()
+            || null
+        ),
+
+        is_active: (
+            elements.signalStatus.value === "true"
+        ),
+    };
+
+    const submitButton = (
+        elements.signalForm.querySelector(
+            'button[type="submit"]'
+        )
+    );
+
+    const originalText = submitButton.textContent;
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Creating...";
+
+    try {
+        const signal = await apiRequest(
+            `/assets/${state.selectedAssetId}/signals`,
+            {
+                method: "POST",
+                body: JSON.stringify(payload),
+            }
+        );
+
+        elements.signalForm.reset();
+        elements.signalType.value = "Watch";
+        elements.signalStatus.value = "true";
+
+        await refreshSignals(false);
+
+        showToast(
+            signal.is_triggered
+                ? (
+                    "Signal created and immediately "
+                    + "triggered."
+                )
+                : "Market signal created."
+        );
+    } catch (error) {
+        showToast(error.message, true);
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = originalText;
+    }
+}
+
+
+async function refreshSignals(
+    showConfirmation = true
+) {
+    if (state.selectedAssetId === null) {
+        return;
+    }
+
+    try {
+        state.signals = await apiRequest(
+            `/assets/${state.selectedAssetId}/signals`
+        );
+
+        const asset = state.assetDetails.get(
+            state.selectedAssetId
+        );
+
+        if (asset) {
+            renderSignals(asset);
+        }
+
+        if (showConfirmation) {
+            showToast("Market signals refreshed.");
+        }
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+
+async function deleteSignal(signalId) {
+    if (state.selectedAssetId === null) {
+        return;
+    }
+
+    const signal = state.signals.find(
+        (item) => item.id === signalId
+    );
+
+    if (!signal) {
+        return;
+    }
+
+    const confirmed = window.confirm(
+        `Delete this ${signal.signal_type} signal?`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        await apiRequest(
+            (
+                `/assets/${state.selectedAssetId}`
+                + `/signals/${signalId}`
+            ),
+            {
+                method: "DELETE",
+            }
+        );
+
+        await refreshSignals(false);
+
+        showToast("Market signal deleted.");
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+
+function handleSignalListClick(event) {
+    const button = event.target.closest(
+        "[data-signal-action]"
+    );
+
+    if (!button) {
+        return;
+    }
+
+    const signalId = Number(
+        button.dataset.signalId
+    );
+
+    if (!Number.isInteger(signalId)) {
+        return;
+    }
+
+    if (
+        button.dataset.signalAction === "delete"
+    ) {
+        deleteSignal(signalId);
+    }
+}
+
+
 async function refreshSelectedPrices() {
     if (state.selectedAssetId === null) {
         return;
@@ -1470,6 +1860,21 @@ function registerEventListeners() {
     elements.syncForm.addEventListener(
         "submit",
         synchronizePrices
+    );
+
+    elements.signalForm.addEventListener(
+        "submit",
+        createSignal
+    );
+
+    elements.refreshSignalsButton.addEventListener(
+        "click",
+        () => refreshSignals()
+    );
+
+    elements.signalList.addEventListener(
+        "click",
+        handleSignalListClick
     );
 
     elements.refreshPricesButton.addEventListener(

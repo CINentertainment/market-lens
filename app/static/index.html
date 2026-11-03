@@ -415,6 +415,178 @@
                     </div>
                 </div>
             </article>
+            <section class="signal-workspace">
+                <article class="panel signal-form-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">
+                                MARKET MONITORING
+                            </p>
+
+                            <h2>Create Market Signal</h2>
+                        </div>
+                    </div>
+
+                    <form id="signalForm">
+                        <div class="form-grid">
+                            <div>
+                                <label for="signalType">
+                                    Signal Type
+                                </label>
+
+                                <select
+                                    id="signalType"
+                                    required
+                                >
+                                    <option value="Watch">
+                                        Watch
+                                    </option>
+
+                                    <option value="Buy">
+                                        Buy
+                                    </option>
+
+                                    <option value="Sell">
+                                        Sell
+                                    </option>
+
+                                    <option value="Review">
+                                        Review
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="signalDirection">
+                                    Trigger Direction
+                                </label>
+
+                                <select id="signalDirection">
+                                    <option value="">
+                                        No price trigger
+                                    </option>
+
+                                    <option value="Above">
+                                        Price reaches or exceeds
+                                    </option>
+
+                                    <option value="Below">
+                                        Price reaches or falls below
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="signalTargetPrice">
+                                    Target Price
+                                </label>
+
+                                <input
+    id="signalTargetPrice"
+    type="number"
+    min="0.01"
+    step="0.01"
+    placeholder="Optional target price"
+>
+                            </div>
+
+                            <div>
+                                <label for="signalStatus">
+                                    Status
+                                </label>
+
+                                <select
+                                    id="signalStatus"
+                                    required
+                                >
+                                    <option value="true">
+                                        Active
+                                    </option>
+
+                                    <option value="false">
+                                        Inactive
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="signalRationale">
+                                Analyst Rationale
+                            </label>
+
+                            <textarea
+                                id="signalRationale"
+                                rows="4"
+                                maxlength="2000"
+                                placeholder="Record the reason, conditions, or analytical judgment behind this signal"
+                            ></textarea>
+                        </div>
+
+                        <button
+                            class="primary-button"
+                            type="submit"
+                        >
+                            Create Signal
+                        </button>
+                    </form>
+                </article>
+
+                <article class="panel signal-register-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">
+                                WATCHLIST AND ALERTS
+                            </p>
+
+                            <h2>Market Signals</h2>
+                        </div>
+
+                        <button
+                            id="refreshSignalsButton"
+                            class="secondary-button"
+                            type="button"
+                        >
+                            Refresh Signals
+                        </button>
+                    </div>
+
+                    <div
+                        id="signalSummary"
+                        class="signal-summary-grid"
+                    >
+                        <div class="signal-summary-item">
+                            <span>Active</span>
+                            <strong id="activeSignalCount">
+                                0
+                            </strong>
+                        </div>
+
+                        <div class="signal-summary-item">
+                            <span>Triggered</span>
+                            <strong id="triggeredSignalCount">
+                                0
+                            </strong>
+                        </div>
+
+                        <div class="signal-summary-item">
+                            <span>Total</span>
+                            <strong id="totalSignalCount">
+                                0
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div
+                        id="signalList"
+                        class="signal-list"
+                    >
+                        <p class="empty-state">
+                            No market signals have been created.
+                        </p>
+                    </div>
+                </article>
+            </section>
             <article class="panel history-panel">
                 <div class="panel-heading">
                     <div>
