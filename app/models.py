@@ -93,6 +93,13 @@ class MarketAsset(Base):
         cascade="all, delete-orphan",
     )
 
+    paper_positions: Mapped[
+        list["PaperPosition"]
+    ] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+
 
 class PriceBar(Base):
     __tablename__ = "price_bars"
@@ -247,4 +254,90 @@ class MarketSignal(Base):
 
     asset: Mapped["MarketAsset"] = relationship(
         back_populates="market_signals",
+    )
+
+
+class PaperPosition(Base):
+    __tablename__ = "paper_positions"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    asset_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "market_assets.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    position_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="Long",
+    )
+
+    quantity: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6),
+        nullable=False,
+    )
+
+    entry_price: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6),
+        nullable=False,
+    )
+
+    opened_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        index=True,
+    )
+
+    exit_price: Mapped[
+        Decimal | None
+    ] = mapped_column(
+        Numeric(18, 6),
+        nullable=True,
+    )
+
+    closed_date: Mapped[
+        date | None
+    ] = mapped_column(
+        Date,
+        nullable=True,
+        index=True,
+    )
+
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    is_open: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="1",
+        index=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    asset: Mapped["MarketAsset"] = relationship(
+        back_populates="paper_positions",
     )

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import (
@@ -830,6 +831,374 @@ def delete_market_signal(
     )
 
     database.delete(signal)
+    database.commit()
+
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT
+    )
+def get_paper_position_or_404(
+    asset_id: int,
+    position_id: int,
+    database: Session,
+) -> models.PaperPosition:
+    position = database.get(
+        models.PaperPosition,
+        position_id,
+    )
+
+    if (
+        position is None
+        or position.asset_id != asset_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paper position not found.",
+        )
+
+    return position
+
+
+def build_paper_position_response(
+    position: models.PaperPosition,
+    database: Session,
+) -> dict:
+    quantity = Decimal(position.quantity)
+    entry_price = Decimal(position.entry_price)
+
+    entry_value = quantity * entry_price
+
+    latest_price_bar = get_latest_price_bar(
+        position.asset_id,
+        database,
+    )
+
+    current_price = (
+        Decimal(latest_price_bar.close_price)
+        if latest_price_bar is not None
+        else None
+    )
+
+    market_value = None
+    unrealized_gain_loss = None
+    realized_gain_loss = None
+    return_percent = None
+
+    if position.is_open and current_price is not None:
+        market_value = quantity * current_price
+
+        if position.position_type == "Short":
+            unrealized_gain_loss = (
+                entry_price - current_price
+            ) * quantity
+        else:
+            unrealized_gain_loss = (
+                current_price - entry_price
+            ) * quantity
+
+        if entry_value != 0:
+            return_percent = (
+                unrealized_gain_loss
+                / entry_value
+                * Decimal("100")
+            )
+
+    if (
+        not position.is_open
+        and position.exit_price is not None
+    ):
+        exit_price = Decimal(position.exit_price)
+
+        if position.position_type == "Short":
+            realized_gain_loss = (
+                entry_price - exit_price
+            ) * quantity
+        else:
+            realized_gain_loss = (
+                exit_price - entry_price
+            ) * quantity
+
+        if entry_value != 0:
+            return_percent = (
+                realized_gain_loss
+                / entry_value
+                * Decimal("100")
+            )
+
+    return {
+        "id": position.id,
+        "asset_id": position.asset_id,
+        "position_type": position.position_type,
+        "quantity": position.quantity,
+        "entry_price": position.entry_price,
+        "opened_date": position.opened_date,
+        "exit_price": position.exit_price,
+        "closed_date": position.closed_date,
+        "notes": position.notes,
+        "is_open": position.is_open,
+        "current_price": current_price,
+        "entry_value": entry_value,
+        "market_value": market_value,
+        "unrealized_gain_loss": unrealized_gain_loss,
+        "realized_gain_loss": realized_gain_loss,
+        "return_percent": return_percent,
+        "created_at": position.created_at,
+        "updated_at": position.updated_at,
+    }
+
+
+@app.post(
+    "/assets/{asset_id}/positions",
+    response_model=schemas.PaperPositionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_paper_position(
+    asset_id: int,
+    position_data: schemas.PaperPositionCreate,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    position = models.PaperPosition(
+        asset_id=asset_id,
+        **position_data.model_dump(),
+    )
+
+    database.add(position)
+    database.commit()
+    database.refresh(position)
+
+    return build_paper_position_response(
+        position,
+        database,
+    )
+
+
+@app.get(
+    "/assets/{asset_id}/positions",
+    response_model=list[
+        schemas.PaperPositionResponse
+    ],
+)
+def list_paper_positions(
+    asset_id: int,
+    include_closed: bool = True,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    statement = select(
+        models.PaperPosition
+    ).where(
+        models.PaperPosition.asset_id == asset_id
+    )
+
+    if not include_closed:
+        statement = statement.where(
+            models.PaperPosition.is_open.is_(True)
+        )
+
+    statement = statement.order_by(
+        models.PaperPosition.opened_date.desc(),
+        models.PaperPosition.id.desc(),
+    )
+
+    positions = database.scalars(statement).all()
+
+    return [
+        build_paper_position_response(
+            position,
+            database,
+        )
+        for position in positions
+    ]
+
+
+@app.get(
+    (
+        "/assets/{asset_id}"
+        "/positions/{position_id}"
+    ),
+    response_model=schemas.PaperPositionResponse,
+)
+def get_paper_position(
+    asset_id: int,
+    position_id: int,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    position = get_paper_position_or_404(
+        asset_id,
+        position_id,
+        database,
+    )
+
+    return build_paper_position_response(
+        position,
+        database,
+    )
+
+
+@app.patch(
+    (
+        "/assets/{asset_id}"
+        "/positions/{position_id}"
+    ),
+    response_model=schemas.PaperPositionResponse,
+)
+def update_paper_position(
+    asset_id: int,
+    position_id: int,
+    position_data: schemas.PaperPositionUpdate,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    position = get_paper_position_or_404(
+        asset_id,
+        position_id,
+        database,
+    )
+
+    if not position.is_open:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Closed paper positions cannot "
+                "be updated."
+            ),
+        )
+
+    updates = position_data.model_dump(
+        exclude_unset=True
+    )
+
+    required_fields = {
+        "position_type",
+        "quantity",
+        "entry_price",
+        "opened_date",
+    }
+
+    for field_name, value in updates.items():
+        if (
+            field_name in required_fields
+            and value is None
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY
+                ),
+                detail=(
+                    f"{field_name} cannot be null."
+                ),
+            )
+
+        setattr(
+            position,
+            field_name,
+            value,
+        )
+
+    database.commit()
+    database.refresh(position)
+
+    return build_paper_position_response(
+        position,
+        database,
+    )
+
+
+@app.post(
+    (
+        "/assets/{asset_id}"
+        "/positions/{position_id}/close"
+    ),
+    response_model=schemas.PaperPositionResponse,
+)
+def close_paper_position(
+    asset_id: int,
+    position_id: int,
+    close_data: schemas.PaperPositionClose,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    position = get_paper_position_or_404(
+        asset_id,
+        position_id,
+        database,
+    )
+
+    if not position.is_open:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Paper position is already closed.",
+        )
+
+    if close_data.closed_date < position.opened_date:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=(
+                "closed_date cannot be earlier than "
+                "opened_date."
+            ),
+        )
+
+    position.exit_price = close_data.exit_price
+    position.closed_date = close_data.closed_date
+    position.is_open = False
+
+    database.commit()
+    database.refresh(position)
+
+    return build_paper_position_response(
+        position,
+        database,
+    )
+
+
+@app.delete(
+    (
+        "/assets/{asset_id}"
+        "/positions/{position_id}"
+    ),
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_paper_position(
+    asset_id: int,
+    position_id: int,
+    database: Session = Depends(get_db),
+):
+    get_asset_or_404(
+        asset_id,
+        database,
+    )
+
+    position = get_paper_position_or_404(
+        asset_id,
+        position_id,
+        database,
+    )
+
+    database.delete(position)
     database.commit()
 
     return Response(

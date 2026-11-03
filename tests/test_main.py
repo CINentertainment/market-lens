@@ -47,6 +47,7 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def clear_database():
     with Session(test_engine) as database:
+        database.execute(delete(models.PaperPosition))
         database.execute(delete(models.MarketSignal))
         database.execute(delete(models.PriceBar))
         database.execute(delete(models.MarketAsset))
@@ -945,4 +946,380 @@ def test_get_missing_market_signal():
     assert response.status_code == 404
     assert response.json() == {
         "detail": "Market signal not found."
+    }
+def create_test_position(
+    asset_id: int,
+    position_type: str = "Long",
+    quantity: str = "10.00",
+    entry_price: str = "100.00",
+    opened_date: str = "2026-10-20",
+) -> dict:
+    response = client.post(
+        f"/assets/{asset_id}/positions",
+        json={
+            "position_type": position_type,
+            "quantity": quantity,
+            "entry_price": entry_price,
+            "opened_date": opened_date,
+            "notes": "Test paper position.",
+        },
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
+
+
+def test_create_paper_position():
+    asset = create_test_asset()
+
+    response = client.post(
+        f"/assets/{asset['id']}/positions",
+        json={
+            "position_type": "Long",
+            "quantity": "10.00",
+            "entry_price": "100.00",
+            "opened_date": "2026-10-20",
+            "notes": "Testing a long position.",
+        },
+    )
+
+    assert response.status_code == 201
+
+    position = response.json()
+
+    assert position["asset_id"] == asset["id"]
+    assert position["position_type"] == "Long"
+    assert Decimal(position["quantity"]) == Decimal("10")
+    assert Decimal(position["entry_price"]) == Decimal("100")
+    assert position["opened_date"] == "2026-10-20"
+    assert position["notes"] == (
+        "Testing a long position."
+    )
+    assert position["is_open"] is True
+    assert position["exit_price"] is None
+    assert position["closed_date"] is None
+    assert position["current_price"] is None
+    assert Decimal(position["entry_value"]) == Decimal(
+        "1000"
+    )
+    assert position["market_value"] is None
+    assert position["unrealized_gain_loss"] is None
+    assert position["realized_gain_loss"] is None
+
+
+def test_long_position_market_valuation():
+    asset = create_test_asset()
+
+    create_test_price(asset["id"])
+
+    position = create_test_position(
+        asset["id"],
+        position_type="Long",
+        quantity="10.00",
+        entry_price="100.00",
+    )
+
+    assert Decimal(
+        position["current_price"]
+    ) == Decimal("103.50")
+
+    assert Decimal(
+        position["entry_value"]
+    ) == Decimal("1000.00")
+
+    assert Decimal(
+        position["market_value"]
+    ) == Decimal("1035.00")
+
+    assert Decimal(
+        position["unrealized_gain_loss"]
+    ) == Decimal("35.00")
+
+    assert Decimal(
+        position["return_percent"]
+    ) == Decimal("3.50")
+
+
+def test_short_position_market_valuation():
+    asset = create_test_asset()
+
+    create_test_price(asset["id"])
+
+    position = create_test_position(
+        asset["id"],
+        position_type="Short",
+        quantity="10.00",
+        entry_price="110.00",
+    )
+
+    assert Decimal(
+        position["current_price"]
+    ) == Decimal("103.50")
+
+    assert Decimal(
+        position["entry_value"]
+    ) == Decimal("1100.00")
+
+    assert Decimal(
+        position["market_value"]
+    ) == Decimal("1035.00")
+
+    assert Decimal(
+        position["unrealized_gain_loss"]
+    ) == Decimal("65.00")
+
+    assert Decimal(
+        position["return_percent"]
+    ) > Decimal("0")
+
+
+def test_list_paper_positions():
+    asset = create_test_asset()
+
+    first_position = create_test_position(
+        asset["id"]
+    )
+
+    second_position = create_test_position(
+        asset["id"],
+        position_type="Short",
+        opened_date="2026-10-21",
+    )
+
+    response = client.get(
+        f"/assets/{asset['id']}/positions"
+    )
+
+    assert response.status_code == 200
+
+    positions = response.json()
+
+    assert len(positions) == 2
+    assert positions[0]["id"] == second_position["id"]
+    assert positions[1]["id"] == first_position["id"]
+
+
+def test_update_open_paper_position():
+    asset = create_test_asset()
+    position = create_test_position(asset["id"])
+
+    response = client.patch(
+        (
+            f"/assets/{asset['id']}"
+            f"/positions/{position['id']}"
+        ),
+        json={
+            "quantity": "15.00",
+            "entry_price": "95.00",
+            "notes": "Updated paper position.",
+        },
+    )
+
+    assert response.status_code == 200
+
+    updated_position = response.json()
+
+    assert Decimal(
+        updated_position["quantity"]
+    ) == Decimal("15.00")
+
+    assert Decimal(
+        updated_position["entry_price"]
+    ) == Decimal("95.00")
+
+    assert updated_position["notes"] == (
+        "Updated paper position."
+    )
+
+    assert Decimal(
+        updated_position["entry_value"]
+    ) == Decimal("1425.00")
+
+
+def test_close_long_paper_position():
+    asset = create_test_asset()
+
+    position = create_test_position(
+        asset["id"],
+        quantity="10.00",
+        entry_price="100.00",
+    )
+
+    response = client.post(
+        (
+            f"/assets/{asset['id']}"
+            f"/positions/{position['id']}/close"
+        ),
+        json={
+            "exit_price": "110.00",
+            "closed_date": "2026-10-27",
+        },
+    )
+
+    assert response.status_code == 200
+
+    closed_position = response.json()
+
+    assert closed_position["is_open"] is False
+    assert closed_position["closed_date"] == "2026-10-27"
+
+    assert Decimal(
+        closed_position["exit_price"]
+    ) == Decimal("110.00")
+
+    assert closed_position[
+        "unrealized_gain_loss"
+    ] is None
+
+    assert Decimal(
+        closed_position["realized_gain_loss"]
+    ) == Decimal("100.00")
+
+    assert Decimal(
+        closed_position["return_percent"]
+    ) == Decimal("10.00")
+
+
+def test_filter_excludes_closed_positions():
+    asset = create_test_asset()
+
+    open_position = create_test_position(
+        asset["id"]
+    )
+
+    closed_position = create_test_position(
+        asset["id"],
+        opened_date="2026-10-21",
+    )
+
+    close_response = client.post(
+        (
+            f"/assets/{asset['id']}"
+            f"/positions/{closed_position['id']}/close"
+        ),
+        json={
+            "exit_price": "105.00",
+            "closed_date": "2026-10-27",
+        },
+    )
+
+    assert close_response.status_code == 200
+
+    response = client.get(
+        (
+            f"/assets/{asset['id']}/positions"
+            "?include_closed=false"
+        )
+    )
+
+    assert response.status_code == 200
+
+    positions = response.json()
+
+    assert len(positions) == 1
+    assert positions[0]["id"] == open_position["id"]
+    assert positions[0]["is_open"] is True
+
+
+def test_reject_close_date_before_open_date():
+    asset = create_test_asset()
+
+    position = create_test_position(
+        asset["id"],
+        opened_date="2026-10-20",
+    )
+
+    response = client.post(
+        (
+            f"/assets/{asset['id']}"
+            f"/positions/{position['id']}/close"
+        ),
+        json={
+            "exit_price": "105.00",
+            "closed_date": "2026-10-19",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": (
+            "closed_date cannot be earlier than "
+            "opened_date."
+        )
+    }
+
+
+def test_reject_update_to_closed_position():
+    asset = create_test_asset()
+    position = create_test_position(asset["id"])
+
+    close_response = client.post(
+        (
+            f"/assets/{asset['id']}"
+            f"/positions/{position['id']}/close"
+        ),
+        json={
+            "exit_price": "105.00",
+            "closed_date": "2026-10-27",
+        },
+    )
+
+    assert close_response.status_code == 200
+
+    response = client.patch(
+        (
+            f"/assets/{asset['id']}"
+            f"/positions/{position['id']}"
+        ),
+        json={
+            "quantity": "20.00",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": (
+            "Closed paper positions cannot "
+            "be updated."
+        )
+    }
+
+
+def test_delete_paper_position():
+    asset = create_test_asset()
+    position = create_test_position(asset["id"])
+
+    response = client.delete(
+        (
+            f"/assets/{asset['id']}"
+            f"/positions/{position['id']}"
+        )
+    )
+
+    assert response.status_code == 204
+
+    list_response = client.get(
+        f"/assets/{asset['id']}/positions"
+    )
+
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+
+def test_create_position_for_missing_asset():
+    response = client.post(
+        "/assets/999/positions",
+        json={
+            "position_type": "Long",
+            "quantity": "10.00",
+            "entry_price": "100.00",
+            "opened_date": "2026-10-20",
+            "notes": "Missing asset test.",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Market asset not found."
     }

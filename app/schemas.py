@@ -333,3 +333,112 @@ class MarketSignalResponse(MarketSignalBase):
     triggered_at: datetime | None
     created_at: datetime
     updated_at: datetime
+PositionType = Literal[
+    "Long",
+    "Short",
+]
+
+
+class PaperPositionBase(BaseModel):
+    position_type: PositionType = "Long"
+
+    quantity: Decimal = Field(
+        gt=0,
+        decimal_places=6,
+    )
+
+    entry_price: Decimal = Field(
+        gt=0,
+        decimal_places=6,
+    )
+
+    opened_date: date
+
+    notes: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+    @field_validator("notes")
+    @classmethod
+    def normalize_position_notes(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+
+        return normalized_value or None
+
+
+class PaperPositionCreate(PaperPositionBase):
+    pass
+
+
+class PaperPositionUpdate(BaseModel):
+    position_type: PositionType | None = None
+
+    quantity: Decimal | None = Field(
+        default=None,
+        gt=0,
+        decimal_places=6,
+    )
+
+    entry_price: Decimal | None = Field(
+        default=None,
+        gt=0,
+        decimal_places=6,
+    )
+
+    opened_date: date | None = None
+
+    notes: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+    @field_validator("notes")
+    @classmethod
+    def normalize_updated_position_notes(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+
+        return normalized_value or None
+
+
+class PaperPositionClose(BaseModel):
+    exit_price: Decimal = Field(
+        gt=0,
+        decimal_places=6,
+    )
+
+    closed_date: date
+
+
+class PaperPositionResponse(PaperPositionBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    asset_id: int
+
+    exit_price: Decimal | None
+    closed_date: date | None
+    is_open: bool
+
+    current_price: Decimal | None
+    entry_value: Decimal
+    market_value: Decimal | None
+
+    unrealized_gain_loss: Decimal | None
+    realized_gain_loss: Decimal | None
+    return_percent: Decimal | None
+
+    created_at: datetime
+    updated_at: datetime
