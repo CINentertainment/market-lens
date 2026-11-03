@@ -4,6 +4,7 @@ const state = {
     selectedAssetId: null,
     priceBars: [],
     signals: [],
+    positions: [],
 };
 
 const elements = {
@@ -101,6 +102,43 @@ const elements = {
         "#totalSignalCount"
     ),
     signalList: document.querySelector("#signalList"),
+
+    positionForm: document.querySelector("#positionForm"),
+    positionType: document.querySelector("#positionType"),
+    positionOpenedDate: document.querySelector(
+        "#positionOpenedDate"
+    ),
+    positionQuantity: document.querySelector(
+        "#positionQuantity"
+    ),
+    positionEntryPrice: document.querySelector(
+        "#positionEntryPrice"
+    ),
+    positionNotes: document.querySelector(
+        "#positionNotes"
+    ),
+    positionStatusFilter: document.querySelector(
+        "#positionStatusFilter"
+    ),
+    refreshPositionsButton: document.querySelector(
+        "#refreshPositionsButton"
+    ),
+    openPositionCount: document.querySelector(
+        "#openPositionCount"
+    ),
+    portfolioEntryValue: document.querySelector(
+        "#portfolioEntryValue"
+    ),
+    portfolioMarketValue: document.querySelector(
+        "#portfolioMarketValue"
+    ),
+    portfolioUnrealizedGainLoss: document.querySelector(
+        "#portfolioUnrealizedGainLoss"
+    ),
+    portfolioRealizedGainLoss: document.querySelector(
+        "#portfolioRealizedGainLoss"
+    ),
+    positionList: document.querySelector("#positionList"),
 
     refreshPricesButton: document.querySelector(
         "#refreshPricesButton"
@@ -261,6 +299,13 @@ function setDefaultSyncDates() {
 
     elements.syncEndDate.value = toDateInputValue(
         endDate
+    );
+}
+
+
+function setDefaultPositionDate() {
+    elements.positionOpenedDate.value = (
+        toDateInputValue(new Date())
     );
 }
 
@@ -785,6 +830,7 @@ async function selectAsset(
             priceBars,
             analyticsData,
             signals,
+            positions,
         ] = await Promise.all([
             apiRequest(`/assets/${assetId}`),
             apiRequest(`/assets/${assetId}/prices`),
@@ -794,11 +840,15 @@ async function selectAsset(
             apiRequest(
                 `/assets/${assetId}/signals`
             ),
+            apiRequest(
+                `/assets/${assetId}/positions`
+            ),
         ]);
 
         state.selectedAssetId = assetId;
         state.priceBars = priceBars;
         state.signals = signals;
+        state.positions = positions;
         state.assetDetails.set(assetId, asset);
 
         elements.analysisWorkspace.classList.remove(
@@ -853,6 +903,7 @@ async function selectAsset(
         renderLatestPrice(asset);
         renderAnalytics(asset, analyticsData);
         renderSignals(asset);
+        renderPositions(asset);
         renderPriceTable(asset);
         renderPriceChart(asset);
 
@@ -872,6 +923,7 @@ function closeWorkspace() {
     state.selectedAssetId = null;
     state.priceBars = [];
     state.signals = [];
+    state.positions = [];
 
     elements.analysisWorkspace.classList.add(
         "hidden"
@@ -880,6 +932,11 @@ function closeWorkspace() {
     elements.signalForm.reset();
     elements.signalType.value = "Watch";
     elements.signalStatus.value = "true";
+
+    elements.positionForm.reset();
+    elements.positionType.value = "Long";
+    elements.positionStatusFilter.value = "all";
+    setDefaultPositionDate();
 
     renderStatistics();
 }
@@ -1241,7 +1298,7 @@ function renderPriceChart(asset) {
                     - (
                         Number(bar.close_price)
                         - minimumPrice
-                    ) / priceRange
+                                            ) / priceRange
                 ) * usableHeight
             );
 
@@ -1810,6 +1867,495 @@ function handleSignalListClick(event) {
 }
 
 
+function setPortfolioValue(element, value, currency) {
+    const numericValue = Number(value || 0);
+
+    element.textContent = formatPrice(
+        numericValue,
+        currency
+    );
+
+    element.classList.remove(
+        "positive-value",
+        "negative-value",
+        "neutral-value"
+    );
+
+    if (numericValue > 0) {
+        element.classList.add("positive-value");
+    } else if (numericValue < 0) {
+        element.classList.add("negative-value");
+    } else {
+        element.classList.add("neutral-value");
+    }
+}
+
+
+function getFilteredPositions() {
+    const filter = elements.positionStatusFilter.value;
+
+    if (filter === "open") {
+        return state.positions.filter(
+            (position) => position.is_open
+        );
+    }
+
+    if (filter === "closed") {
+        return state.positions.filter(
+            (position) => !position.is_open
+        );
+    }
+
+    return state.positions;
+}
+
+
+function renderPositions(asset) {
+    const openPositions = state.positions.filter(
+        (position) => position.is_open
+    );
+
+    const entryValue = openPositions.reduce(
+        (total, position) => (
+            total + Number(position.entry_value || 0)
+        ),
+        0
+    );
+
+    const marketValue = openPositions.reduce(
+        (total, position) => (
+            total + Number(position.market_value || 0)
+        ),
+        0
+    );
+
+    const unrealizedGainLoss = openPositions.reduce(
+        (total, position) => (
+            total
+            + Number(position.unrealized_gain_loss || 0)
+        ),
+        0
+    );
+
+    const realizedGainLoss = state.positions.reduce(
+        (total, position) => (
+            total
+            + Number(position.realized_gain_loss || 0)
+        ),
+        0
+    );
+
+    elements.openPositionCount.textContent = (
+        openPositions.length
+    );
+        elements.portfolioEntryValue.textContent = formatPrice(
+        entryValue,
+        asset.currency
+    );
+
+    elements.portfolioMarketValue.textContent = formatPrice(
+        marketValue,
+        asset.currency
+    );
+
+    setPortfolioValue(
+        elements.portfolioUnrealizedGainLoss,
+        unrealizedGainLoss,
+        asset.currency
+    );
+
+    setPortfolioValue(
+        elements.portfolioRealizedGainLoss,
+        realizedGainLoss,
+        asset.currency
+    );
+
+    const positions = getFilteredPositions();
+
+    if (positions.length === 0) {
+        elements.positionList.innerHTML = `
+            <p class="empty-state">
+                No paper positions match this view.
+            </p>
+        `;
+
+        return;
+    }
+
+    elements.positionList.innerHTML = positions
+        .map((position) => {
+            const gainLoss = position.is_open
+                ? position.unrealized_gain_loss
+                : position.realized_gain_loss;
+
+            const gainLossValue = Number(gainLoss || 0);
+            const gainLossClass = gainLossValue > 0
+                ? "positive-value"
+                : gainLossValue < 0
+                    ? "negative-value"
+                    : "neutral-value";
+
+            const statusText = position.is_open
+                ? "Open"
+                : "Closed";
+
+            const valuationLabel = position.is_open
+                ? "Market Value"
+                : "Exit Value";
+
+            const valuation = position.is_open
+                ? position.market_value
+                : (
+                    Number(position.quantity)
+                    * Number(position.exit_price || 0)
+                );
+
+            const notes = (
+                position.notes
+                || "No position notes recorded."
+            );
+
+            return `
+                <article class="position-card ${
+                    position.is_open ? "open" : "closed"
+                }">
+                    <div class="position-card-heading">
+                        <div>
+                            <span class="position-type">
+                                ${escapeHtml(
+                                    position.position_type
+                                )}
+                            </span>
+
+                            <strong>
+                                ${escapeHtml(
+                                    String(position.quantity)
+                                )} units at ${escapeHtml(
+                                    formatPrice(
+                                        position.entry_price,
+                                        asset.currency
+                                    )
+                                )}
+                            </strong>
+                        </div>
+
+                        <span class="position-status ${
+                            position.is_open ? "open" : "closed"
+                        }">
+                            ${statusText}
+                        </span>
+                    </div>
+
+                    <div class="position-metrics">
+                        <div>
+                            <span>Entry Value</span>
+                            <strong>
+                                ${escapeHtml(
+                                    formatPrice(
+                                        position.entry_value,
+                                        asset.currency
+                                    )
+                                )}
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>${valuationLabel}</span>
+                            <strong>
+                                ${escapeHtml(
+                                    formatPrice(
+                                        valuation,
+                                        asset.currency
+                                    )
+                                )}
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>Gain / Loss</span>
+                            <strong class="${gainLossClass}">
+                                ${escapeHtml(
+                                    formatPrice(
+                                        gainLossValue,
+                                        asset.currency
+                                    )
+                                )}
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>Return</span>
+                            <strong class="${gainLossClass}">
+                                ${position.return_percent === null
+                                    ? "—"
+                                    : escapeHtml(
+                                        formatAnalyticsPercent(
+                                            position.return_percent,
+                                            true
+                                        )
+                                    )}
+                            </strong>
+                        </div>
+                    </div>
+
+                    <p class="position-notes">
+                        ${escapeHtml(notes)}
+                    </p>
+
+                    <div class="position-card-footer">
+                        <span>
+                            Opened ${escapeHtml(
+                                formatDate(position.opened_date)
+                            )}${position.closed_date
+                                ? ` · Closed ${escapeHtml(
+                                    formatDate(
+                                        position.closed_date
+                                    )
+                                )}`
+                                : ""}
+                        </span>
+
+                        <div class="position-actions">
+                            ${position.is_open
+                                ? `
+                                    <button
+                                        class="secondary-button compact-button"
+                                        type="button"
+                                        data-position-action="close"
+                                        data-position-id="${position.id}"
+                                    >
+                                        Close Position
+                                    </button>
+                                `
+                                : ""}
+
+                            <button
+                                class="danger-button compact-button"
+                                type="button"
+                                data-position-action="delete"
+                                data-position-id="${position.id}"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </article>
+            `;
+        })
+        .join("");
+}
+
+
+async function createPosition(event) {
+    event.preventDefault();
+
+    if (state.selectedAssetId === null) {
+        showToast(
+            "Select an asset before opening a position.",
+            true
+        );
+        return;
+    }
+
+    const payload = {
+        position_type: elements.positionType.value,
+        quantity: elements.positionQuantity.value,
+        entry_price: elements.positionEntryPrice.value,
+        opened_date: elements.positionOpenedDate.value,
+        notes: elements.positionNotes.value.trim() || null,
+    };
+
+    const submitButton = elements.positionForm.querySelector(
+        'button[type="submit"]'
+    );
+    const originalText = submitButton.textContent;
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Opening...";
+
+    try {
+        await apiRequest(
+            `/assets/${state.selectedAssetId}/positions`,
+            {
+                method: "POST",
+                body: JSON.stringify(payload),
+            }
+        );
+
+        elements.positionForm.reset();
+        elements.positionType.value = "Long";
+        setDefaultPositionDate();
+
+        await refreshPositions(false);
+        showToast("Paper position opened.");
+    } catch (error) {
+        showToast(error.message, true);
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = originalText;
+    }
+}
+
+
+async function refreshPositions(showConfirmation = true) {
+    if (state.selectedAssetId === null) {
+        return;
+    }
+
+    try {
+        state.positions = await apiRequest(
+            `/assets/${state.selectedAssetId}/positions`
+        );
+
+        const asset = state.assetDetails.get(
+            state.selectedAssetId
+        );
+
+        if (asset) {
+            renderPositions(asset);
+        }
+
+        if (showConfirmation) {
+            showToast("Paper positions refreshed.");
+        }
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+
+async function closePosition(positionId) {
+    const position = state.positions.find(
+        (item) => item.id === positionId
+    );
+
+    if (!position || !position.is_open) {
+        return;
+    }
+
+    const defaultExitPrice = (
+        position.current_price
+        || position.entry_price
+    );
+
+    const exitPrice = window.prompt(
+        "Enter the exit price:",
+        Number(defaultExitPrice).toFixed(2)
+    );
+
+    if (exitPrice === null) {
+        return;
+    }
+
+    const numericExitPrice = Number(exitPrice);
+
+    if (!Number.isFinite(numericExitPrice) || numericExitPrice <= 0) {
+        showToast("Enter a valid exit price.", true);
+        return;
+    }
+
+    const closedDate = window.prompt(
+        "Enter the closing date (YYYY-MM-DD):",
+        toDateInputValue(new Date())
+    );
+
+    if (closedDate === null) {
+        return;
+    }
+
+    try {
+        await apiRequest(
+            (
+                `/assets/${state.selectedAssetId}`
+                + `/positions/${positionId}/close`
+            ),
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    exit_price: String(numericExitPrice),
+                    closed_date: closedDate,
+                }),
+            }
+        );
+
+        await refreshPositions(false);
+        showToast("Paper position closed.");
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+
+async function deletePosition(positionId) {
+    const position = state.positions.find(
+        (item) => item.id === positionId
+    );
+
+    if (!position) {
+        return;
+    }
+
+    if (!window.confirm("Delete this paper position?")) {
+        return;
+    }
+
+    try {
+        await apiRequest(
+            (
+                `/assets/${state.selectedAssetId}`
+                + `/positions/${positionId}`
+            ),
+            { method: "DELETE" }
+        );
+
+        await refreshPositions(false);
+        showToast("Paper position deleted.");
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+
+function handlePositionListClick(event) {
+    const button = event.target.closest(
+        "[data-position-action]"
+    );
+
+    if (!button) {
+        return;
+    }
+
+    const positionId = Number(button.dataset.positionId);
+
+    if (!Number.isInteger(positionId)) {
+        return;
+    }
+
+    if (button.dataset.positionAction === "close") {
+        closePosition(positionId);
+    }
+
+    if (button.dataset.positionAction === "delete") {
+        deletePosition(positionId);
+    }
+}
+
+
+function filterPositions() {
+    if (state.selectedAssetId === null) {
+        return;
+    }
+
+    const asset = state.assetDetails.get(
+        state.selectedAssetId
+    );
+
+    if (asset) {
+        renderPositions(asset);
+    }
+}
+
+
 async function refreshSelectedPrices() {
     if (state.selectedAssetId === null) {
         return;
@@ -1877,6 +2423,26 @@ function registerEventListeners() {
         handleSignalListClick
     );
 
+    elements.positionForm.addEventListener(
+        "submit",
+        createPosition
+    );
+
+    elements.positionStatusFilter.addEventListener(
+        "change",
+        filterPositions
+    );
+
+    elements.refreshPositionsButton.addEventListener(
+        "click",
+        () => refreshPositions()
+    );
+
+    elements.positionList.addEventListener(
+        "click",
+        handlePositionListClick
+    );
+
     elements.refreshPricesButton.addEventListener(
         "click",
         refreshSelectedPrices
@@ -1886,6 +2452,7 @@ function registerEventListeners() {
 
 async function initializeApplication() {
     setDefaultSyncDates();
+    setDefaultPositionDate();
     registerEventListeners();
     await loadAssets();
 }

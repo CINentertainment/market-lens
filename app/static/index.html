@@ -587,6 +587,200 @@
                     </div>
                 </article>
             </section>
+            <section class="position-workspace">
+                <article class="panel position-form-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">
+                                PAPER PORTFOLIO
+                            </p>
+
+                            <h2>Open Paper Position</h2>
+                        </div>
+                    </div>
+
+                    <form id="positionForm">
+                        <div class="form-grid two-column">
+                            <div>
+                                <label for="positionType">
+                                    Position Type
+                                </label>
+
+                                <select
+                                    id="positionType"
+                                    required
+                                >
+                                    <option value="Long">
+                                        Long
+                                    </option>
+
+                                    <option value="Short">
+                                        Short
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="positionOpenedDate">
+                                    Opened Date
+                                </label>
+
+                                <input
+                                    id="positionOpenedDate"
+                                    type="date"
+                                    required
+                                >
+                            </div>
+
+                            <div>
+                                <label for="positionQuantity">
+                                    Quantity
+                                </label>
+
+                                <input
+                                    id="positionQuantity"
+                                    type="number"
+                                    min="0.000001"
+                                    step="any"
+                                    placeholder="10"
+                                    required
+                                >
+                            </div>
+
+                            <div>
+                                <label for="positionEntryPrice">
+                                    Entry Price
+                                </label>
+
+                                <input
+                                    id="positionEntryPrice"
+                                    type="number"
+                                    min="0.000001"
+                                    step="any"
+                                    placeholder="300.00"
+                                    required
+                                >
+                            </div>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="positionNotes">
+                                Position Notes
+                            </label>
+
+                            <textarea
+                                id="positionNotes"
+                                rows="4"
+                                maxlength="2000"
+                                placeholder="Record the investment thesis, expected movement, or risk considerations."
+                            ></textarea>
+                        </div>
+
+                        <button
+                            class="primary-button"
+                            type="submit"
+                        >
+                            Open Position
+                        </button>
+                    </form>
+                </article>
+
+                <article class="panel position-register-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">
+                                PAPER TRADING
+                            </p>
+
+                            <h2>Position Register</h2>
+                        </div>
+
+                        <div class="position-register-controls">
+                            <select
+                                id="positionStatusFilter"
+                                aria-label="Filter paper positions"
+                            >
+                                <option value="all">
+                                    All Positions
+                                </option>
+
+                                <option value="open">
+                                    Open Positions
+                                </option>
+
+                                <option value="closed">
+                                    Closed Positions
+                                </option>
+                            </select>
+
+                            <button
+                                id="refreshPositionsButton"
+                                class="secondary-button"
+                                type="button"
+                            >
+                                Refresh Positions
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="portfolio-summary-grid">
+                        <div class="portfolio-summary-item">
+                            <span>Open Positions</span>
+
+                            <strong id="openPositionCount">
+                                0
+                            </strong>
+                        </div>
+
+                        <div class="portfolio-summary-item">
+                            <span>Entry Value</span>
+
+                            <strong id="portfolioEntryValue">
+                                —
+                            </strong>
+                        </div>
+
+                        <div class="portfolio-summary-item">
+                            <span>Market Value</span>
+
+                            <strong id="portfolioMarketValue">
+                                —
+                            </strong>
+                        </div>
+
+                        <div class="portfolio-summary-item">
+                            <span>Unrealized Gain / Loss</span>
+
+                            <strong
+                                id="portfolioUnrealizedGainLoss"
+                                class="neutral-value"
+                            >
+                                —
+                            </strong>
+                        </div>
+
+                        <div class="portfolio-summary-item">
+                            <span>Realized Gain / Loss</span>
+
+                            <strong
+                                id="portfolioRealizedGainLoss"
+                                class="neutral-value"
+                            >
+                                —
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div
+                        id="positionList"
+                        class="position-list"
+                    >
+                        <p class="empty-state">
+                            No paper positions have been opened.
+                        </p>
+                    </div>
+                </article>
+            </section>
             <article class="panel history-panel">
                 <div class="panel-heading">
                     <div>
