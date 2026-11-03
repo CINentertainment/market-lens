@@ -110,22 +110,27 @@ Market Lens provides:
 - Per-asset valuation summaries
 - Realized and unrealized performance reporting
 
+
+with:
+
+```markdown
 ## Screenshots
 
-Screenshots can be added under:
+### Dashboard and Portfolio Command View
 
-```text
-docs/screenshots/
-```
+![Market Lens dashboard](docs/screenshots/dashboard.png)
 
-Recommended screenshots:
+### Asset Analysis
 
-- Main dashboard
-- Portfolio command view
-- Asset analysis workspace
-- Market signals
-- Paper-position register
-- Printable portfolio report
+![Market Lens asset analysis](docs/screenshots/asset-analysis.png)
+
+### Market Monitoring and Paper Portfolio
+
+![Market Lens monitoring workspace](docs/screenshots/market-monitoring.png)
+
+### Portfolio Report
+
+![Market Lens portfolio report](docs/screenshots/portfolio-report.png)
 
 ## Technology Stack
 
