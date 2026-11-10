@@ -27,6 +27,9 @@ from app import (
     schemas,
 )
 from app.database import Base, engine, get_db
+from app.integration_routes import (
+    router as artemis_integration_router,
+)
 from app.providers import yahoo_finance
 
 
@@ -50,7 +53,9 @@ app.mount(
     StaticFiles(directory=STATIC_DIR),
     name="static",
 )
-
+app.include_router(
+    artemis_integration_router
+)
 
 def get_asset_or_404(
     asset_id: int,
