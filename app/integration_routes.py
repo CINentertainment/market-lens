@@ -263,3 +263,6 @@ def read_integration_signals(
     return database.scalars(
         statement
     ).all()
+# Narrow authenticated writes for autonomous research; read-only routes remain compatible.
+from app.market_automation import router as market_automation_router
+router.include_router(market_automation_router)

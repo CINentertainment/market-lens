@@ -344,7 +344,7 @@ def test_signal_read_does_not_trigger_or_commit():
         assert stored_signal.triggered_at is None
 
 
-def test_integration_exposes_only_get_routes():
+def test_legacy_integration_exposes_only_get_routes():
     openapi_paths = app.openapi()["paths"]
 
     integration_paths = {
@@ -353,7 +353,7 @@ def test_integration_exposes_only_get_routes():
         in openapi_paths.items()
         if path.startswith(
             "/integration/artemis"
-        )
+        ) and not path.startswith("/integration/artemis/automation/")
     }
 
     assert integration_paths
@@ -376,3 +376,13 @@ def test_integration_exposes_only_get_routes():
         )
 
         assert exposed_methods == {"get"}
+
+def test_automation_writes_are_limited_to_research_operations():
+    paths=app.openapi()["paths"]
+    writes={path for path, operations in paths.items() if path.startswith("/integration/artemis/automation/") and "post" in operations}
+    assert writes == {
+        "/integration/artemis/automation/track",
+        "/integration/artemis/automation/assets/{asset_id}/refresh",
+        "/integration/artemis/automation/assets/{asset_id}/research",
+    }
+    assert not any(method in operations for path, operations in paths.items() if path.startswith("/integration/artemis/automation/") for method in ("delete","patch","put"))
