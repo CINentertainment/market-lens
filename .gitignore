@@ -35,3 +35,6 @@ build/
 .vscode/
 .DS_Store
 Thumbs.db
+# Local backups and source review archive
+/.runtime/
+/Market-Lens-Source-Review.zip
